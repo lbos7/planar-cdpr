@@ -3,14 +3,11 @@
 
 #include "ODriveCAN.h"
 #include <FlexCAN_T4.h>
+#include "cdprConfig.h"
 
 // Declarations to avoid compilation errors
 struct CAN_message_t;
 using CanMsg = CAN_message_t;
-
-// Constants
-constexpr uint32_t CAN_BAUDRATE = 250000;
-constexpr uint8_t NUM_ODRIVES = 4;
 
 // External variables for FlexCAN_T4 object & ODriveCAN array
 extern FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can_intf;
