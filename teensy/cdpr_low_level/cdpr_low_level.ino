@@ -18,8 +18,14 @@ ODriveUserData odrv2_user_data;
 ODriveUserData odrv3_user_data;
 ODriveUserData* dataStructs[NUM_ODRIVES] = {&odrv0_user_data, &odrv1_user_data, &odrv2_user_data, &odrv3_user_data};
 
+CDPRDimensions cdprDimensions;
+CDPRDimensions* dimPtr = &cdprDimensions;
+
+CDPRControlParams controlParams;
+CDPRControlParams* controlPtr = &controlParams;
+
 // CDPR object creation
-CDPR cdpr(odrives, dataStructs, EE_SIDE_LEN);
+CDPR cdpr(odrives, dataStructs, dimPtr, controlPtr);
 
 void setup() {
   Serial.begin(115200);

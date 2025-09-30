@@ -1,12 +1,28 @@
 #include "cdpr.hpp"
 #include "cdprFlexCAN.h"
+#include "eigen.h"
+#include <Eigen/Dense>
 #include <Arduino.h>
 
 
-CDPR::CDPR(ODriveCAN** odrives, ODriveUserData** dataStructs, float eeSideLen) {
+CDPR::CDPR(ODriveCAN** odrives,
+           ODriveUserData** dataStructs,
+           CDPRDimensions* dimPtr,
+           CDPRControlParams* controlPtr) {
+
     this->odrives = odrives;
     this->dataStructs = dataStructs;
-    this->eeSideLen = eeSideLen;
+    this->eeSideLen = dimPtr->eeSideLen;
+    this->drumRadius = dimPtr->drumRadius;
+    this->drumCircumference = dimPtr->drumCircumference;
+    this->workspaceLen = dimPtr->workspaceLen;
+    this->workspaceBorderOffset = dimPtr->workspaceBorderOffset;
+    this->anchorPoints = dimPtr->anchorPoints;
+    this->eeOffsets = dimPtr->eeOffsets;
+    this->tensionSetpoint = controlPtr->tensionSetpoint;
+    this->homingVelocity = controlPtr->homingVelocity;
+    this->homingVelThresh = controlPtr->homingVelThresh;
+    this->homingCheckThresh = controlPtr->homingCheckThresh;
 }
 
 bool CDPR::setup() {
@@ -54,9 +70,9 @@ void CDPR::homingSequence() {
 
         uint8_t numChecks = 0;
 
-        this->odrives[i]->setVelocity(HOMING_VELOCITY, 0.0);
+        this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
 
-        while (numChecks < HOMING_CHECK_THRESH) {
+        while (numChecks < this->homingCheckThresh) {
             this->update();
 
             if (this->dataStructs[i]->received_feedback) {
@@ -64,7 +80,7 @@ void CDPR::homingSequence() {
                 this->dataStructs[i]->received_feedback = false;
                 motorSpeed = feedback.Vel_Estimate;
                 
-                if (motorSpeed <= HOMING_VELOCITY_THRESH) {
+                if (motorSpeed <= this->homingVelThresh) {
                     numChecks++;
                 } else {
                     numChecks = 0;
@@ -72,9 +88,8 @@ void CDPR::homingSequence() {
             }
         }
 
-        this->robotState.motorOffsets[i] = feedback.Pos_Estimate;
+        this->robotState.motorOffsets(i) = feedback.Pos_Estimate;
         this->odrives[i]->setVelocity(0.0, 0.0);
-        // this->confirmSetControl(ODriveControlMode::CONTROL_MODE_POSITION_CONTROL, ODriveInputMode::INPUT_MODE_TRAP_TRAJ, i);
         this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_POSITION_CONTROL,
                                             ODriveInputMode::INPUT_MODE_TRAP_TRAJ);
         this->deactivateMotors();
@@ -95,20 +110,84 @@ void CDPR::update() {
             if (this->dataStructs[i]->received_feedback) {
                 Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
-                this->robotState.lengths[i] = this->motorPos2CableLength(feedback.Pos_Estimate, i);
+                this->robotState.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
+            }
+            if (this->dataStructs[i]->received_torque) {
+                Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
+                this->dataStructs[i]->received_torque = false;
+                this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
             }
         }
     }
 }
 
+Eigen::Vector2f CDPR::solveFK(Eigen::Vector2f guess, float tol, uint8_t maxIter) {
+    
+    Eigen::Vector2f eePos = guess;
+
+    for (uint8_t iter = 0; iter < maxIter; iter++) {
+        Eigen::Vector4f predLengths;
+        Eigen::Matrix<float, 4, 2> J;
+
+        for (int i = 0; i < NUM_ODRIVES; i++) {
+            Eigen::Vector2f cornerPos = eePos + this->eeOffsets.row(i).transpose();
+            Eigen::Vector2f vec = cornerPos - this->anchorPoints.row(i).transpose();
+            float len = vec.norm();
+            predLengths(i) = len;
+
+            if (len > 1e-6f) {
+                J(i, 0) = vec(0) / len; // dL/dx
+                J(i, 1) = vec(1) / len; // dL/dy
+            } else {
+                J.row(i).setZero();
+            }
+        }
+
+        // residuals
+        Eigen::Vector4f residuals = predLengths - this->robotState.lengths;
+
+        // Newton-Raphson update
+        Eigen::Vector2f delta = (J.transpose() * J).ldlt().solve(J.transpose() * residuals);
+
+        eePos -= delta;
+
+        if (delta.norm() < tol) break; // convergence
+    }
+
+    return eePos;
+}
+
+Eigen::Vector4f CDPR::solveIK(Eigen::Vector2f eePos) {
+
+    Eigen::Vector4f lengths;
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Eigen::Vector2f corner = eePos + this->eeOffsets.row(i).transpose(); // 2x1
+        Eigen::Vector2f v = corner - this->anchorPoints.row(i).transpose(); // 2x1
+        lengths(i) = v.norm();
+    }
+    return lengths;
+}
+
 float CDPR::motorPos2CableLength(float motorPos, uint8_t motorID) {
-    float turnsDiff = this->robotState.motorOffsets[motorID] - motorPos;
-    return turnsDiff * DRUM_CIRCUMFERENCE;
+    float turnsDiff = this->robotState.motorOffsets(motorID) - motorPos;
+    return turnsDiff * this->drumCircumference;
 }
 
 float CDPR::cableLength2MotorPos(float cableLength, uint8_t motorID) {
-    float turnsDiff = cableLength / DRUM_CIRCUMFERENCE;
-    return this->robotState.motorOffsets[motorID] - turnsDiff;
+    float turnsDiff = cableLength / this->drumCircumference;
+    return this->robotState.motorOffsets(motorID) - turnsDiff;
+}
+
+float CDPR::torque2Tension(float torque) {
+    return torque / this->drumRadius;
+}
+
+float CDPR::tension2Torque(float tension) {
+    return tension * this->drumRadius;
+}
+
+void CDPR::changeTensionSetpoint(float tensionSetpoint) {
+    this->tensionSetpoint = tensionSetpoint;
 }
 
 void CDPR::registerCallbacks() {
@@ -125,14 +204,6 @@ void CDPR::confirmSetState(ODriveAxisState desiredState, uint8_t index) {
         this->update();
     }
 }
-
-// void CDPR::confirmSetControl(ODriveControlMode desiredControl, ODriveInputMode desiredInput, uint8_t index) {
-//     while (this->dataStructs[index]->last_heartbeat.Control_Mode != desiredControl && this->dataStructs[index]->last_heartbeat.Input_Mode != desiredInput) {
-//         this->odrives[index]->setControllerMode(desiredControl,
-//                                                 desiredInput);
-//         this->update();
-//     }
-// }
 
 void CDPR::checkODriveConnections() {
     Serial.println("Checking connection to ODrives...");
