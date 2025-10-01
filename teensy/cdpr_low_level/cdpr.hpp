@@ -18,6 +18,7 @@ class CDPR {
         bool setup();
         void homingSequence();
         void deactivateMotors();
+        void activateMotors();
         void update();
         Eigen::Vector2f solveFK(Eigen::Vector2f guess, float tol = 1e-3, uint8_t maxIter = 20);
         Eigen::Vector4f solveIK(Eigen::Vector2f eePos);

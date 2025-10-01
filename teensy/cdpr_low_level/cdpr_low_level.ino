@@ -22,8 +22,35 @@ CDPRControlParams controlParams;
 CDPRControlParams* controlPtr = &controlParams;
 
 // CDPR object creation
-// CDPR* cdpr = nullptr;
 CDPR cdpr(odrives, dataStructs, dimPtr, controlPtr);
+
+String cmdBuffer = "";
+
+void processCommand(String cmd) {
+  cmd.trim();  // remove whitespace like \r
+  cmd.toUpperCase();
+
+  if (cmd == "HOME") {
+    cdpr.homingSequence();
+  } else if (cmd == "DISABLE") {
+    cdpr.deactivateMotors();
+  } else if (cmd == "ENABLE") {
+    cdpr.activateMotors();
+  } else if (cmd.startsWith("MOVE")) {
+    // float x, y;
+    // int firstSpace = cmd.indexOf(' ');
+    // int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+    // if (firstSpace > 0 && secondSpace > firstSpace) {
+    //   x = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+    //   y = cmd.substring(secondSpace + 1).toFloat();
+    //   moveToPosition(x, y);
+    // } else {
+    //   Serial.println("ERR Invalid MOVE command");
+    // }
+  } else {
+    Serial.println("ERR Unknown command");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -46,4 +73,17 @@ void setup() {
 
 void loop() {
   cdpr.update();
+
+  while (Serial.available()) {
+    char c = Serial.read();
+
+    // Step 2: Look for newline
+    if (c == '\n') {
+      processCommand(cmdBuffer);  // Step 3: Handle full command
+      cmdBuffer = "";             // Step 4: Reset
+    } else {
+      cmdBuffer += c;             // Keep building string
+    }
+  }
+
 }

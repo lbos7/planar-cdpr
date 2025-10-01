@@ -116,6 +116,14 @@ void CDPR::deactivateMotors() {
     }
 }
 
+void CDPR::activateMotors() {
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        this->confirmSetState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL, i);
+        this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_POSITION_CONTROL,
+                                            ODriveInputMode::INPUT_MODE_TRAP_TRAJ);
+    }
+}
+
 void CDPR::update() {
     pumpEventsWrapper(can_intf);
     if (this->completedStartup) {
