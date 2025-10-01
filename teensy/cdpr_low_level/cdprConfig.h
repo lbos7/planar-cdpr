@@ -6,15 +6,15 @@
 #include <math.h>
 
 // Constants
-constexpr uint32_t CAN_BAUDRATE = 250000;
+constexpr uint32_t CAN_BAUDRATE = 1000000;
 constexpr uint8_t NUM_ODRIVES = 4;
 constexpr float EE_SIDE_LEN = 0.0646;   // meters
 constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
-constexpr float WORKSPACE_LEN = 0.857;  // meters - from CAD model
+constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
 constexpr float WORKSPACE_BORDER_OFFSET = 0.0254;   // meters
 constexpr float TENSION_SETPOINT = 5.0; // Newtons
-constexpr float HOMING_VELOCITY = 1.0;  // turns/s
+constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
 

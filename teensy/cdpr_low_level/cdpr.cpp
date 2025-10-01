@@ -26,12 +26,6 @@ CDPR::CDPR(ODriveCAN** odrives,
 }
 
 bool CDPR::setup() {
-    bool clearSuccess = this->clearODriveErrors();
-
-    if (!clearSuccess) {
-        Serial.println("ODrive errors could not be cleared");
-        return false;
-    }
 
     this->registerCallbacks();
 
@@ -45,6 +39,7 @@ bool CDPR::setup() {
 
     if (vbusCheck) {
         Serial.println("ODrives Connected & Powered");
+        this->clearODriveErrors();
     } else {
         Serial.println("ODrive Connection Error");
     }
@@ -53,10 +48,12 @@ bool CDPR::setup() {
 }
 
 void CDPR::homingSequence() {
-    this->deactivateMotors();
 
+    Serial.println("Homing Robot");
+
+    this->deactivateMotors();
     for (int i = 0; i < NUM_ODRIVES; i++) {
-        this->odrives[i]->setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+        this->confirmSetState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL, i);
         this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_VELOCITY_CONTROL,
                                             ODriveInputMode::INPUT_MODE_VEL_RAMP);
 
@@ -67,10 +64,27 @@ void CDPR::homingSequence() {
         Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
         this->dataStructs[i]->received_feedback = false;
         float motorSpeed = feedback.Vel_Estimate;
+        float initialPos = feedback.Pos_Estimate;
 
         uint8_t numChecks = 0;
 
         this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
+
+
+        // Wait until motor reaches ~90% of homing velocity and has moved at least a 1/4 turn
+        while (true) {
+            this->update();
+
+            if (this->dataStructs[i]->received_feedback) {
+                Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
+                this->dataStructs[i]->received_feedback = false;
+
+                if (fabs(feedback.Vel_Estimate) >= this->homingVelocity * 0.9 && fabs(feedback.Pos_Estimate - initialPos) >= 0.25) {
+                    break; // motor is moving enough to start homing check
+                }
+            }
+        }
+        
 
         while (numChecks < this->homingCheckThresh) {
             this->update();
@@ -87,7 +101,6 @@ void CDPR::homingSequence() {
                 }
             }
         }
-
         this->robotState.motorOffsets(i) = feedback.Pos_Estimate;
         this->odrives[i]->setVelocity(0.0, 0.0);
         this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_POSITION_CONTROL,
@@ -192,9 +205,9 @@ void CDPR::changeTensionSetpoint(float tensionSetpoint) {
 
 void CDPR::registerCallbacks() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
-        this->odrives[i]->onFeedback(onFeedback, &this->dataStructs[i]);
-        this->odrives[i]->onStatus(onHeartbeat, &this->dataStructs[i]);
-        this->odrives[i]->onTorques(onTorques, &this->dataStructs[i]);
+        this->odrives[i]->onFeedback(onFeedback, this->dataStructs[i]);
+        this->odrives[i]->onStatus(onHeartbeat, this->dataStructs[i]);
+        this->odrives[i]->onTorques(onTorques, this->dataStructs[i]);
     }
 }
 
@@ -210,8 +223,8 @@ void CDPR::checkODriveConnections() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         Serial.printf("Waiting for ODrive %d\n", i);
         while (!this->dataStructs[i]->received_heartbeat) {
-            pumpEventsWrapper(can_intf);
-            delay(100);
+            this->update();
+            delay(10);
         }
         Serial.printf("Found ODrive %d\n", i);
     }
@@ -234,11 +247,8 @@ bool CDPR::checkODriveVBus() {
     return true;
 }
 
-bool CDPR::clearODriveErrors() {
-    bool totalSuccess = true;
+void CDPR::clearODriveErrors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
-        bool success = this->odrives[i]->clearErrors();
-        totalSuccess = totalSuccess && success;
+        this->odrives[i]->clearErrors();
     }
-    return totalSuccess;
 }

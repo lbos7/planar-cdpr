@@ -48,7 +48,7 @@ class CDPR {
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);
         void checkODriveConnections();
         bool checkODriveVBus();
-        bool clearODriveErrors();
+        void clearODriveErrors();
 };
 
 #endif  // CDPR_H_
