@@ -23,6 +23,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->homingVelocity = controlPtr->homingVelocity;
     this->homingVelThresh = controlPtr->homingVelThresh;
     this->homingCheckThresh = controlPtr->homingCheckThresh;
+    this->robotState = CDPRData();
 }
 
 bool CDPR::setup() {
@@ -57,9 +58,31 @@ void CDPR::checkTorques() {
     }
 }
 
+void CDPR::checkMotorPos() {
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        while (!this->dataStructs[i]->received_feedback);
+        Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
+        this->dataStructs[i]->received_feedback = false;
+        Serial.printf("Motor %d Pos Estimate:\t%f\n", i, feedback.Pos_Estimate);
+        Serial.printf("Motor %d Offset Pos:\t%f\n", i, this->robotState.motorOffsets[i]);
+    }
+}
+
+void CDPR::checkLengths() {
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        float len = this->robotState.lengths(i);
+        Serial.printf("Cable %d length:\t%f\n", i, len);
+    }
+}
+
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
+
+    if (this->completedHoming) {
+        this->completedHoming = false;
+        this->robotState.motorOffsets = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
+    }
 
     this->deactivateMotors();
     for (int i = 0; i < NUM_ODRIVES; i++) {
@@ -80,13 +103,12 @@ void CDPR::homingSequence() {
 
         this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
 
-
         // Wait until motor reaches ~90% of homing velocity and has moved at least a 1/4 turn
         while (true) {
             this->update();
 
             if (this->dataStructs[i]->received_feedback) {
-                Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
+                feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
 
                 if (fabs(feedback.Vel_Estimate) >= this->homingVelocity * 0.9 && fabs(feedback.Pos_Estimate - initialPos) >= 0.25) {
@@ -100,7 +122,7 @@ void CDPR::homingSequence() {
             this->update();
 
             if (this->dataStructs[i]->received_feedback) {
-                Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
+                feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
                 motorSpeed = feedback.Vel_Estimate;
                 
@@ -111,14 +133,38 @@ void CDPR::homingSequence() {
                 }
             }
         }
-        this->robotState.motorOffsets(i) = feedback.Pos_Estimate;
+
+        while (!this->dataStructs[i]->received_feedback) {
+            this->update();
+        }
+        feedback = this->dataStructs[i]->last_feedback;
+        this->dataStructs[i]->received_feedback = false;
         this->odrives[i]->setVelocity(0.0, 0.0);
-        this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_POSITION_CONTROL,
-                                            ODriveInputMode::INPUT_MODE_TRAP_TRAJ);
+        this->robotState.motorOffsets(i) = feedback.Pos_Estimate;
         this->deactivateMotors();
     }
-    // this->completedHoming = true;
+    this->completedHoming = true;
     Serial.println("Robot Homed");
+}
+
+void CDPR::pretensionSetup() {
+    Serial.println("Preparing for pretension");
+    Eigen::Vector4f goalLengths = this->solveIK(Eigen::Vector2f(0.0f, 0.0f));
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Serial.printf("Cable %d goal length:\t%f\n", i, goalLengths(i));
+        this->confirmSetState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL, i);
+        this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_VELOCITY_CONTROL,
+                                            ODriveInputMode::INPUT_MODE_VEL_RAMP);
+        this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
+        Serial.printf("Diff in length:\t%f\n", fabs(this->robotState.lengths(i) - goalLengths(i)));
+        while (fabs(this->robotState.lengths(i) - goalLengths(i)) > 0.05) {
+            // this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
+            this->update();
+        }
+        this->odrives[i]->setVelocity(0.0, 0.0);
+        this->deactivateMotors();
+    }
+    Serial.println("Pretension setup completed");
 }
 
 void CDPR::addPretension() {
@@ -172,19 +218,20 @@ void CDPR::activateMotors() {
 }
 
 void CDPR::update() {
+    Get_Encoder_Estimates_msg_t feedback;
     pumpEventsWrapper(can_intf);
     if (this->completedHoming) {
         for (int i = 0; i < NUM_ODRIVES; i++) {
             if (this->dataStructs[i]->received_feedback) {
-                Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
+                feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
                 this->robotState.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
             }
-            if (this->dataStructs[i]->received_torque) {
-                Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
-                this->dataStructs[i]->received_torque = false;
-                this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
-            }
+            // if (this->dataStructs[i]->received_torque) {
+            //     Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
+            //     this->dataStructs[i]->received_torque = false;
+            //     this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
+            // }
         }
     }
 }

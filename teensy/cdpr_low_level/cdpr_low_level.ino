@@ -36,10 +36,19 @@ void processCommand(String cmd) {
     cdpr.deactivateMotors();
   } else if (cmd == "ENABLE") {
     cdpr.activateMotors();
+  } else if (cmd == "RESET") {
+    cdpr.homingSequence();
+    cdpr.pretensionSetup();
+    cdpr.addPretension();
   } else if (cmd == "TENSION") {
     cdpr.addPretension();
+  } else if (cmd == "SETUPT") {
+    cdpr.pretensionSetup();
   } else if (cmd == "CHECKT") {
     cdpr.checkTorques();
+  } else if (cmd == "CHECKL") {
+    cdpr.checkMotorPos();
+    cdpr.checkLengths();
   } else if (cmd.startsWith("MOVE")) {
     // float x, y;
     // int firstSpace = cmd.indexOf(' ');
@@ -73,6 +82,8 @@ void setup() {
     while (true);
   }
   cdpr.homingSequence();
+  cdpr.pretensionSetup();
+  cdpr.addPretension();
 }
 
 void loop() {
@@ -81,7 +92,6 @@ void loop() {
   while (Serial.available()) {
     char c = Serial.read();
 
-    // Step 2: Look for newline
     if (c == '\n') {
       processCommand(cmdBuffer);  // Step 3: Handle full command
       cmdBuffer = "";             // Step 4: Reset

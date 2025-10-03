@@ -17,7 +17,10 @@ class CDPR {
 
         bool setup();
         void checkTorques();
+        void checkMotorPos();
+        void checkLengths();
         void homingSequence();
+        void pretensionSetup();
         void addPretension();
         void deactivateMotors();
         void activateMotors();
