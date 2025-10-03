@@ -36,6 +36,10 @@ void processCommand(String cmd) {
     cdpr.deactivateMotors();
   } else if (cmd == "ENABLE") {
     cdpr.activateMotors();
+  } else if (cmd == "TENSION") {
+    cdpr.addPretension();
+  } else if (cmd == "CHECKT") {
+    cdpr.checkTorques();
   } else if (cmd.startsWith("MOVE")) {
     // float x, y;
     // int firstSpace = cmd.indexOf(' ');

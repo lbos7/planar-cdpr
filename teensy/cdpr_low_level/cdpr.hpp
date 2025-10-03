@@ -16,7 +16,9 @@ class CDPR {
              CDPRControlParams* controlPtr);
 
         bool setup();
+        void checkTorques();
         void homingSequence();
+        void addPretension();
         void deactivateMotors();
         void activateMotors();
         void update();
@@ -43,7 +45,7 @@ class CDPR {
         float homingVelThresh;
         uint8_t homingCheckThresh;
         CDPRData robotState;
-        bool completedStartup = false;
+        bool completedHoming = false;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

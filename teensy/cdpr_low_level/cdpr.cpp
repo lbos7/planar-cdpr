@@ -47,6 +47,16 @@ bool CDPR::setup() {
     return vbusCheck;
 }
 
+void CDPR::checkTorques() {
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        while (!this->dataStructs[i]->received_torque);
+        Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
+        this->dataStructs[i]->received_torque = false;
+        Serial.printf("Motor %d target torque:\t%f\n", i, torque.Torque_Target);
+        Serial.printf("Motor %d estimated torque:\t%f\n", i, torque.Torque_Estimate);
+    }
+}
+
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
@@ -107,7 +117,44 @@ void CDPR::homingSequence() {
                                             ODriveInputMode::INPUT_MODE_TRAP_TRAJ);
         this->deactivateMotors();
     }
+    // this->completedHoming = true;
     Serial.println("Robot Homed");
+}
+
+void CDPR::addPretension() {
+
+    Get_Torques_msg_t torque;
+    bool done = false;
+    bool check;
+    bool torquesSet[NUM_ODRIVES] = {false, false, false, false};
+    this->activateMotors();
+
+    Serial.println("Adding pretension");
+    while (!done) {
+        for (int i = 0; i < NUM_ODRIVES; i++) {
+            if (!torquesSet[i]) {
+                this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_TORQUE_CONTROL,
+                                                    ODriveInputMode::INPUT_MODE_PASSTHROUGH);
+                this->odrives[i]->setTorque(this->tension2Torque(this->tensionSetpoint));
+                this->update();
+            }
+        }
+        done = true;
+        for (int i = 0; i < NUM_ODRIVES; i++) {
+            if (!torquesSet[i]) {
+                while (!this->dataStructs[i]->received_torque) {
+                    this->update();
+                }
+                torque = this->dataStructs[i]->last_torque;
+                this->dataStructs[i]->received_torque = false;
+                check = torque.Torque_Target == this->tension2Torque(this->tensionSetpoint);
+                torquesSet[i] = check;
+                done = done && check;
+            }
+        }
+        this->checkTorques();
+    }
+    Serial.println("Added pretension");
 }
 
 void CDPR::deactivateMotors() {
@@ -126,7 +173,7 @@ void CDPR::activateMotors() {
 
 void CDPR::update() {
     pumpEventsWrapper(can_intf);
-    if (this->completedStartup) {
+    if (this->completedHoming) {
         for (int i = 0; i < NUM_ODRIVES; i++) {
             if (this->dataStructs[i]->received_feedback) {
                 Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
