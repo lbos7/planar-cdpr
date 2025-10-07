@@ -36,10 +36,15 @@ void processCommand(String cmd) {
     cdpr.deactivateMotors();
   } else if (cmd == "ENABLE") {
     cdpr.activateMotors();
+  } else if (cmd == "DEBUG") {
+    cdpr.setState(CDPRState::Debug);
   } else if (cmd == "RESET") {
+    cdpr.setState(CDPRState::Startup);
     cdpr.homingSequence();
+    cdpr.setState(CDPRState::Homed);
     cdpr.pretensionSetup();
     cdpr.addPretension();
+    cdpr.setState(CDPRState::Active);
   } else if (cmd == "TENSION") {
     cdpr.addPretension();
   } else if (cmd == "SETUPT") {
@@ -51,6 +56,24 @@ void processCommand(String cmd) {
     cdpr.checkLengths();
   } else if (cmd == "CHECKP") {
     cdpr.checkEEPos();
+  } else if (cmd == "CHECKS") {
+    cdpr.checkState();
+  } else if (cmd.startsWith("SETS ")) {
+    String stateStr = cmd.substring(5);
+    CDPRState newState;
+
+    if (stateStr == "ACTIVE") {
+        newState = CDPRState::Active;
+    } else if (stateStr == "DEBUG") {
+        newState = CDPRState::Debug;
+    } else {
+        Serial.println("ERR Invalid state");
+        return;
+    }
+
+    cdpr.setState(newState);
+    Serial.print("OK State set to ");
+    Serial.println(stateStr);
   } else if (cmd.startsWith("MOVE")) {
     float x, y, speed;
 
@@ -96,8 +119,10 @@ void setup() {
     while (true);
   }
   cdpr.homingSequence();
+  cdpr.setState(CDPRState::Homed);
   cdpr.pretensionSetup();
   cdpr.addPretension();
+  cdpr.setState(CDPRState::Active);
 }
 
 void loop() {

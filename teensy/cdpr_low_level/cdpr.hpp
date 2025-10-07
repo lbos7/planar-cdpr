@@ -20,12 +20,15 @@ class CDPR {
         void checkMotorPos();
         void checkLengths();
         void checkEEPos();
+        void checkState();
         void homingSequence();
         void pretensionSetup();
         void addPretension();
         void deactivateMotors();
         void activateMotors();
         void update();
+        void setState(CDPRState state);
+        CDPRState getState();
         Eigen::Vector2f solveFK(Eigen::Vector2f guess = Eigen::Vector2f::Zero(), float tol = 1e-3, uint8_t maxIter = 20);
         Eigen::Vector4f solveIK(Eigen::Vector2f eePos);
         float motorPos2CableLength(float motorPos, uint8_t motorID);
@@ -51,6 +54,7 @@ class CDPR {
         float homingVelThresh;
         uint8_t homingCheckThresh;
         CDPRData robotState;
+        CDPRState currentState = CDPRState::Startup;
         bool completedHoming = false;
         bool completedPretension = false;
         bool trajActive = false;

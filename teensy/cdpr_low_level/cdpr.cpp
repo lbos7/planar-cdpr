@@ -79,14 +79,23 @@ void CDPR::checkEEPos() {
     Serial.printf("Current EE Pos: [%.3f, %.3f]\n", this->currentPos(0), this->currentPos(1));
 }
 
+void CDPR::checkState() {
+    // Print robot state
+    const char* stateStr = "Unknown";
+
+    switch (this->currentState) {  // assuming `this->state` is of type CDPRState
+        case CDPRState::Startup: stateStr = "Startup"; break;
+        case CDPRState::Active:  stateStr = "Active";  break;
+        case CDPRState::Debug:   stateStr = "Debug";   break;
+    }
+
+    Serial.print("Current State: ");
+    Serial.println(stateStr);
+}
+
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
-
-    if (this->completedHoming) {
-        this->completedHoming = false;
-        this->robotState.motorOffsets = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
-    }
 
     this->deactivateMotors();
     for (int i = 0; i < NUM_ODRIVES; i++) {
@@ -204,7 +213,6 @@ void CDPR::addPretension() {
         this->checkTorques();
     }
     Serial.println("Added pretension");
-    this->completedPretension = true;
 }
 
 void CDPR::deactivateMotors() {
@@ -225,35 +233,72 @@ void CDPR::activateMotors() {
 
 void CDPR::update() {
     Get_Encoder_Estimates_msg_t feedback;
+    Get_Torques_msg_t torque;
     pumpEventsWrapper(can_intf);
-    if (this->completedHoming) {
+
+    if (this->currentState == CDPRState::Homed) {
         for (int i = 0; i < NUM_ODRIVES; i++) {
             if (this->dataStructs[i]->received_feedback) {
                 feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
                 this->robotState.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
             }
-            // if (this->dataStructs[i]->received_torque) {
-            //     Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
-            //     this->dataStructs[i]->received_torque = false;
-            //     this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
-            // }
         }
-        if (this->completedPretension) {
-            this->currentPos = this->solveFK(this->currentPos);
-        }
-        if (this->trajActive) {
-            this->updateTraj();
-        }
-        if (this->hold) {
-            Eigen::Vector4f lens = this->solveIK(this->holdPos);
-            for (int i = 0; i < NUM_ODRIVES; i++) {
-                float motorPos = this->cableLength2MotorPos(lens(i), i);
-                float motorTorque = this->tension2Torque(this->tensionSetpoint);
-                this->odrives[i]->setPosition(motorPos, 0.0f, motorTorque);
+    } else if (this->currentState != CDPRState::Startup) {
+        for (int i = 0; i < NUM_ODRIVES; i++) {
+            if (this->dataStructs[i]->received_feedback) {
+                feedback = this->dataStructs[i]->last_feedback;
+                this->dataStructs[i]->received_feedback = false;
+                this->robotState.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
+            }
+            if (this->dataStructs[i]->received_torque) {
+                torque = this->dataStructs[i]->last_torque;
+                this->dataStructs[i]->received_torque = false;
+                this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
             }
         }
+        this->currentPos = this->solveFK(this->currentPos);
     }
+    if (this->currentState == CDPRState::Active) {
+        // Controller code
+    }
+
+    // if (this->completedHoming) {
+    //     for (int i = 0; i < NUM_ODRIVES; i++) {
+    //         if (this->dataStructs[i]->received_feedback) {
+    //             feedback = this->dataStructs[i]->last_feedback;
+    //             this->dataStructs[i]->received_feedback = false;
+    //             this->robotState.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
+    //         }
+    //         // if (this->dataStructs[i]->received_torque) {
+    //         //     Get_Torques_msg_t torque = this->dataStructs[i]->last_torque;
+    //         //     this->dataStructs[i]->received_torque = false;
+    //         //     this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
+    //         // }
+    //     }
+    //     if (this->completedPretension) {
+    //         this->currentPos = this->solveFK(this->currentPos);
+    //     }
+    //     if (this->trajActive) {
+    //         this->updateTraj();
+    //     }
+    //     if (this->hold) {
+    //         Eigen::Vector4f lens = this->solveIK(this->holdPos);
+    //         for (int i = 0; i < NUM_ODRIVES; i++) {
+    //             float motorPos = this->cableLength2MotorPos(lens(i), i);
+    //             float motorTorque = this->tension2Torque(this->tensionSetpoint);
+    //             this->odrives[i]->setPosition(motorPos, 0.0f, motorTorque);
+    //         }
+    //     }
+    // }
+}
+
+void CDPR::setState(CDPRState state) {
+    this->currentState = state;
+}
+
+CDPRState CDPR::getState() {
+    return this->currentState;
 }
 
 Eigen::Vector2f CDPR::solveFK(Eigen::Vector2f guess, float tol, uint8_t maxIter) {

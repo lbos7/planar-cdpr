@@ -56,11 +56,15 @@ struct CDPRControlParams {
 // Struct for cable data (lenghts, tensions, etc.) - same numbering scheme as ODrives
 struct CDPRData {
     Eigen::Vector4f lengths = Eigen::Vector4f::Zero();
-    // float lengths[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
     Eigen::Vector4f tensions = Eigen::Vector4f::Zero();
-    // float tensions[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
     Eigen::Vector4f motorOffsets = Eigen::Vector4f::Zero();
-    // float motorOffsets[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
+};
+
+enum class CDPRState {
+    Startup,
+    Homed,
+    Active,
+    Debug
 };
 
 #endif  // CDPR_CONFIG_H_
