@@ -13,7 +13,7 @@ constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
 constexpr float WORKSPACE_BORDER_OFFSET = 0.0254;   // meters
-constexpr float TENSION_SETPOINT = 10.0; // Newtons
+constexpr float TENSION_SETPOINT = 15.0; // Newtons
 constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
@@ -55,11 +55,11 @@ struct CDPRControlParams {
 
 // Struct for cable data (lenghts, tensions, etc.) - same numbering scheme as ODrives
 struct CDPRData {
-    Eigen::Vector4f lengths = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
+    Eigen::Vector4f lengths = Eigen::Vector4f::Zero();
     // float lengths[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
-    Eigen::Vector4f tensions = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
+    Eigen::Vector4f tensions = Eigen::Vector4f::Zero();
     // float tensions[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
-    Eigen::Vector4f motorOffsets = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
+    Eigen::Vector4f motorOffsets = Eigen::Vector4f::Zero();
     // float motorOffsets[NUM_ODRIVES] = {0.0, 0.0, 0.0, 0.0};
 };
 

@@ -19,19 +19,22 @@ class CDPR {
         void checkTorques();
         void checkMotorPos();
         void checkLengths();
+        void checkEEPos();
         void homingSequence();
         void pretensionSetup();
         void addPretension();
         void deactivateMotors();
         void activateMotors();
         void update();
-        Eigen::Vector2f solveFK(Eigen::Vector2f guess, float tol = 1e-3, uint8_t maxIter = 20);
+        Eigen::Vector2f solveFK(Eigen::Vector2f guess = Eigen::Vector2f::Zero(), float tol = 1e-3, uint8_t maxIter = 20);
         Eigen::Vector4f solveIK(Eigen::Vector2f eePos);
         float motorPos2CableLength(float motorPos, uint8_t motorID);
         float cableLength2MotorPos(float cableLength, uint8_t motorID);
         float torque2Tension(float torque);
         float tension2Torque(float tension);
         void changeTensionSetpoint(float tensionSetpoint);
+        void startTraj(Eigen::Vector2f goal, float speed);
+        void updateTraj();
 
     private:
         ODriveCAN** odrives;
@@ -49,6 +52,17 @@ class CDPR {
         uint8_t homingCheckThresh;
         CDPRData robotState;
         bool completedHoming = false;
+        bool completedPretension = false;
+        bool trajActive = false;
+        bool hold = false;
+        float trajStartTime = 0.0;
+        float trajDuration = 0.0;
+        float lastUpdateTime = 0.0;
+        Eigen::Vector2f startPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f goalPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f currentPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f prevPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f holdPos = Eigen::Vector2f::Zero();
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

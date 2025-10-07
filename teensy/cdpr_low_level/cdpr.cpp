@@ -75,6 +75,10 @@ void CDPR::checkLengths() {
     }
 }
 
+void CDPR::checkEEPos() {
+    Serial.printf("Current EE Pos: [%.3f, %.3f]\n", this->currentPos(0), this->currentPos(1));
+}
+
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
@@ -158,7 +162,6 @@ void CDPR::pretensionSetup() {
         this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
         Serial.printf("Diff in length:\t%f\n", fabs(this->robotState.lengths(i) - goalLengths(i)));
         while (fabs(this->robotState.lengths(i) - goalLengths(i)) > 0.05) {
-            // this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
             this->update();
         }
         this->odrives[i]->setVelocity(0.0, 0.0);
@@ -201,12 +204,15 @@ void CDPR::addPretension() {
         this->checkTorques();
     }
     Serial.println("Added pretension");
+    this->completedPretension = true;
 }
 
 void CDPR::deactivateMotors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         this->confirmSetState(ODriveAxisState::AXIS_STATE_IDLE, i);
     }
+    this->completedPretension = false;
+    this->hold = false;
 }
 
 void CDPR::activateMotors() {
@@ -232,6 +238,20 @@ void CDPR::update() {
             //     this->dataStructs[i]->received_torque = false;
             //     this->robotState.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
             // }
+        }
+        if (this->completedPretension) {
+            this->currentPos = this->solveFK(this->currentPos);
+        }
+        if (this->trajActive) {
+            this->updateTraj();
+        }
+        if (this->hold) {
+            Eigen::Vector4f lens = this->solveIK(this->holdPos);
+            for (int i = 0; i < NUM_ODRIVES; i++) {
+                float motorPos = this->cableLength2MotorPos(lens(i), i);
+                float motorTorque = this->tension2Torque(this->tensionSetpoint);
+                this->odrives[i]->setPosition(motorPos, 0.0f, motorTorque);
+            }
         }
     }
 }
@@ -303,6 +323,56 @@ float CDPR::tension2Torque(float tension) {
 
 void CDPR::changeTensionSetpoint(float tensionSetpoint) {
     this->tensionSetpoint = tensionSetpoint;
+}
+
+void CDPR::startTraj(Eigen::Vector2f goal, float speed) {
+    if (speed <= 0.0) return;
+    this->startPos = this->solveFK(this->currentPos);
+    this->goalPos = goal;
+    this->trajDuration = (this->goalPos - this->startPos).norm() / speed;
+    this->lastUpdateTime = this->trajStartTime = millis() / 1000.0f;
+    this->trajActive = true;
+    this->hold = false;
+}
+
+void CDPR::updateTraj() {
+    float t = (millis() / 1000.0f) - this->trajStartTime;
+    float dt = t - this->lastUpdateTime;
+    float s = t / this->trajDuration;
+
+    if (s >= 1.0f) {
+        s = 1.0f;
+        this->trajActive = false;
+
+        // Send one final command to hold position and zero velocity
+        Eigen::Vector4f finalLens = this->solveIK(this->goalPos);
+        for (int i = 0; i < NUM_ODRIVES; i++) {
+            float motorPos = this->cableLength2MotorPos(finalLens(i), i);
+            float motorTorque = this->tension2Torque(this->tensionSetpoint);
+            this->odrives[i]->setPosition(motorPos, 0.0f, motorTorque);
+        }
+
+        this->lastUpdateTime = t;
+        this->holdPos = goalPos;
+        this->hold = true;
+        return;
+    }
+
+    Eigen::Vector2f desiredPos = startPos + s * (goalPos - startPos);
+    Eigen::Vector4f desiredLens = this->solveIK(desiredPos);
+
+    Eigen::Vector4f cableDiffs = desiredLens - this->robotState.lengths;
+    Eigen::Vector4f cableSpeeds = cableDiffs / dt;
+
+    float motorPos, motorSpeed, motorTorque;
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        motorPos = this->cableLength2MotorPos(desiredLens(i), i);
+        motorSpeed = this->cableLength2MotorPos(cableSpeeds(i), i);
+        motorTorque = this->tension2Torque(this->tensionSetpoint);
+        this->odrives[i]->setPosition(motorPos, motorSpeed, motorTorque);
+    }
+
+    this->lastUpdateTime = t;
 }
 
 void CDPR::registerCallbacks() {

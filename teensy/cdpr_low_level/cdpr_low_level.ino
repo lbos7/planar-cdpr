@@ -49,17 +49,31 @@ void processCommand(String cmd) {
   } else if (cmd == "CHECKL") {
     cdpr.checkMotorPos();
     cdpr.checkLengths();
+  } else if (cmd == "CHECKP") {
+    cdpr.checkEEPos();
   } else if (cmd.startsWith("MOVE")) {
-    // float x, y;
-    // int firstSpace = cmd.indexOf(' ');
-    // int secondSpace = cmd.indexOf(' ', firstSpace + 1);
-    // if (firstSpace > 0 && secondSpace > firstSpace) {
-    //   x = cmd.substring(firstSpace + 1, secondSpace).toFloat();
-    //   y = cmd.substring(secondSpace + 1).toFloat();
-    //   moveToPosition(x, y);
-    // } else {
-    //   Serial.println("ERR Invalid MOVE command");
-    // }
+    float x, y, speed;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+    int thirdSpace  = cmd.indexOf(' ', secondSpace + 1);
+
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+        // If thirdSpace == -1, there are exactly 3 arguments (x, y, speed)
+        if (thirdSpace == -1) thirdSpace = cmd.length();
+
+        x = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        y = cmd.substring(secondSpace + 1, thirdSpace).toFloat();
+        speed = cmd.substring(thirdSpace + 1).toFloat();
+
+        cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        Serial.print("OK Starting trajectory to (");
+        Serial.print(x); Serial.print(", "); Serial.print(y);
+        Serial.print(") @ "); Serial.print(speed); Serial.println(" m/s");
+    } else {
+        Serial.println("ERR Invalid MOVE command (expected: MOVE x y speed)");
+    }
   } else {
     Serial.println("ERR Unknown command");
   }
