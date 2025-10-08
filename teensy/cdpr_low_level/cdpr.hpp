@@ -21,6 +21,7 @@ class CDPR {
         void checkLengths();
         void checkEEPos();
         void checkState();
+        void checkGains();
         void homingSequence();
         void pretensionSetup();
         void addPretension();
@@ -29,6 +30,7 @@ class CDPR {
         void update();
         void setState(CDPRState state);
         CDPRState getState();
+        void setGains(float Kp, float Kd);
         Eigen::Vector2f solveFK(Eigen::Vector2f guess = Eigen::Vector2f::Zero(), float tol = 1e-3, uint8_t maxIter = 20);
         Eigen::Vector4f solveIK(Eigen::Vector2f eePos);
         float motorPos2CableLength(float motorPos, uint8_t motorID);
@@ -36,8 +38,12 @@ class CDPR {
         float torque2Tension(float torque);
         float tension2Torque(float tension);
         void changeTensionSetpoint(float tensionSetpoint);
-        void startTraj(Eigen::Vector2f goal, float speed);
-        void updateTraj();
+        // void startTraj(Eigen::Vector2f goal, float speed);
+        // void updateTraj();
+        void setDesiredPos(Eigen::Vector2f pos);
+        // Eigen::Vector2f computeForceFromError();
+        Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
+        Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
 
     private:
         ODriveCAN** odrives;
@@ -53,8 +59,8 @@ class CDPR {
         float homingVelocity;
         float homingVelThresh;
         uint8_t homingCheckThresh;
-        CDPRData robotState;
-        CDPRState currentState = CDPRState::Startup;
+        CDPRData robotData;
+        CDPRState robotState = CDPRState::Startup;
         bool completedHoming = false;
         bool completedPretension = false;
         bool trajActive = false;
@@ -64,9 +70,18 @@ class CDPR {
         float lastUpdateTime = 0.0;
         Eigen::Vector2f startPos = Eigen::Vector2f::Zero();
         Eigen::Vector2f goalPos = Eigen::Vector2f::Zero();
-        Eigen::Vector2f currentPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f eePos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f desiredPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f eeVel = Eigen::Vector2f::Zero();
+        Eigen::Vector2f desiredVel = Eigen::Vector2f::Zero();
         Eigen::Vector2f prevPos = Eigen::Vector2f::Zero();
         Eigen::Vector2f holdPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f error = Eigen::Vector2f::Zero();
+        Eigen::Vector2f dedt = Eigen::Vector2f::Zero();
+        Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
+        float prevUpdateTime = 0.0;
+        float Kp = 1.0;
+        float Kd = 0.0;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

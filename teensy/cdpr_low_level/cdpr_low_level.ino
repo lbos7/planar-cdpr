@@ -26,6 +26,14 @@ CDPR cdpr(odrives, dataStructs, dimPtr, controlPtr);
 
 String cmdBuffer = "";
 
+// For repeated loop timing measurement
+const int N_LOOPS = 150;       // number of loops to average
+unsigned long loopTimeSum = 0;
+int loopCount = 0;
+bool measuring = true;          // true when currently measuring
+
+elapsedMicros loopTimer;
+
 void processCommand(String cmd) {
   cmd.trim();  // remove whitespace like \r
   cmd.toUpperCase();
@@ -58,6 +66,8 @@ void processCommand(String cmd) {
     cdpr.checkEEPos();
   } else if (cmd == "CHECKS") {
     cdpr.checkState();
+  } else if (cmd == "CHECKG") {
+    cdpr.checkGains();
   } else if (cmd.startsWith("SETS ")) {
     String stateStr = cmd.substring(5);
     CDPRState newState;
@@ -74,6 +84,48 @@ void processCommand(String cmd) {
     cdpr.setState(newState);
     Serial.print("OK State set to ");
     Serial.println(stateStr);
+  } else if (cmd.startsWith("SETG")) {
+    float Kp, Kd;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+
+    // Need exactly 2 numbers
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+        Kp = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        Kd = cmd.substring(secondSpace + 1).toFloat();
+
+        // Example: set gains in your CDPR control object
+        cdpr.setGains(Kp, Kd);
+
+        Serial.print("OK Gains set: Kp = ");
+        Serial.print(Kp);
+        Serial.print(", Kd = ");
+        Serial.println(Kd);
+    } else {
+        Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd)");
+    }
+  } else if (cmd.startsWith("SETG")) {
+    float Kp, Kd;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+
+    // Need exactly 2 numbers
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+        Kp = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        Kd = cmd.substring(secondSpace + 1).toFloat();
+
+        // Example: set gains in your CDPR control object
+        cdpr.setGains(Kp, Kd);
+
+        Serial.print("OK Gains set: Kp = ");
+        Serial.print(Kp);
+        Serial.print(", Kd = ");
+        Serial.println(Kd);
+    } else {
+        Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd)");
+    }
   } else if (cmd.startsWith("MOVE")) {
     float x, y, speed;
 
@@ -90,10 +142,11 @@ void processCommand(String cmd) {
         y = cmd.substring(secondSpace + 1, thirdSpace).toFloat();
         speed = cmd.substring(thirdSpace + 1).toFloat();
 
-        cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
         Serial.print("OK Starting trajectory to (");
         Serial.print(x); Serial.print(", "); Serial.print(y);
         Serial.print(") @ "); Serial.print(speed); Serial.println(" m/s");
+        cdpr.setDesiredPos(Eigen::Vector2f(x, y));
     } else {
         Serial.println("ERR Invalid MOVE command (expected: MOVE x y speed)");
     }
@@ -122,21 +175,43 @@ void setup() {
   cdpr.setState(CDPRState::Homed);
   cdpr.pretensionSetup();
   cdpr.addPretension();
-  cdpr.setState(CDPRState::Active);
+  cdpr.setState(CDPRState::Debug);
 }
 
 void loop() {
+  loopTimer = 0;  // reset timer at start of each loop
+
   cdpr.update();
 
   while (Serial.available()) {
     char c = Serial.read();
 
     if (c == '\n') {
-      processCommand(cmdBuffer);  // Step 3: Handle full command
-      cmdBuffer = "";             // Step 4: Reset
+      processCommand(cmdBuffer);
+      cmdBuffer = "";
     } else {
-      cmdBuffer += c;             // Keep building string
+      cmdBuffer += c;
     }
   }
 
+  // --- Loop timing measurement ---
+  if (measuring) {
+    loopTimeSum += loopTimer;
+    loopCount++;
+
+    if (loopCount >= N_LOOPS) {
+      float avgLoopTime = (float)loopTimeSum / loopCount;
+      Serial.print("Average loop time over ");
+      Serial.print(N_LOOPS);
+      Serial.print(" loops: ");
+      Serial.print(avgLoopTime);
+      Serial.println(" us");
+
+      // Reset counters to measure again on next N_LOOPS
+      loopTimeSum = 0;
+      loopCount = 0;
+      // Keep measuring for multiple sets
+      // Optionally you can insert a short delay or a trigger condition here
+    }
+  }
 }
