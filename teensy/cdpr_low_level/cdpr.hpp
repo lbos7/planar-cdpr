@@ -30,7 +30,7 @@ class CDPR {
         void update();
         void setState(CDPRState state);
         CDPRState getState();
-        void setGains(float Kp, float Kd);
+        void setGains(float Kp, float Kd, float Ki);
         Eigen::Vector2f solveFK(Eigen::Vector2f guess = Eigen::Vector2f::Zero(), float tol = 1e-3, uint8_t maxIter = 20);
         Eigen::Vector4f solveIK(Eigen::Vector2f eePos);
         float motorPos2CableLength(float motorPos, uint8_t motorID);
@@ -41,7 +41,8 @@ class CDPR {
         // void startTraj(Eigen::Vector2f goal, float speed);
         // void updateTraj();
         void setDesiredPos(Eigen::Vector2f pos);
-        // Eigen::Vector2f computeForceFromError();
+        void applyHoldController(float dt);
+        void applyTrajController();
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
 
@@ -59,6 +60,16 @@ class CDPR {
         float homingVelocity;
         float homingVelThresh;
         uint8_t homingCheckThresh;
+        float KpHold;
+        float KdHold;
+        float KiHold;
+        float KpTraj;
+        float KdTraj;
+        float tau;
+        float holdThresh;
+        float maxTension;
+        float minTension;
+        Eigen::Vector2f intError = Eigen::Vector2f::Zero();
         CDPRData robotData;
         CDPRState robotState = CDPRState::Startup;
         bool completedHoming = false;
@@ -80,8 +91,6 @@ class CDPR {
         Eigen::Vector2f dedt = Eigen::Vector2f::Zero();
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
         float prevUpdateTime = 0.0;
-        float Kp = 1.0;
-        float Kd = 0.0;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

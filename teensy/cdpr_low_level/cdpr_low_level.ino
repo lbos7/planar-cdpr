@@ -85,27 +85,32 @@ void processCommand(String cmd) {
     Serial.print("OK State set to ");
     Serial.println(stateStr);
   } else if (cmd.startsWith("SETG")) {
-    float Kp, Kd;
+    float Kp, Kd, Ki;
 
     int firstSpace  = cmd.indexOf(' ');
     int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+    int thirdSpace  = cmd.indexOf(' ', secondSpace + 1);
 
-    // Need exactly 2 numbers
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
     if (firstSpace > 0 && secondSpace > firstSpace) {
+        // If thirdSpace == -1, there are exactly 3 arguments (x, y, speed)
+        if (thirdSpace == -1) thirdSpace = cmd.length();
+
         Kp = cmd.substring(firstSpace + 1, secondSpace).toFloat();
-        Kd = cmd.substring(secondSpace + 1).toFloat();
+        Kd = cmd.substring(secondSpace + 1, thirdSpace).toFloat();
+        Ki = cmd.substring(thirdSpace + 1).toFloat();
 
-        // Example: set gains in your CDPR control object
-        cdpr.setGains(Kp, Kd);
-
-        Serial.print("OK Gains set: Kp = ");
-        Serial.print(Kp);
-        Serial.print(", Kd = ");
-        Serial.println(Kd);
+            Serial.print("OK Gains set: Kp = ");
+            Serial.print(Kp);
+            Serial.print(", Kd = ");
+            Serial.print(Kd);
+            Serial.print(", Ki = ");
+            Serial.println(Ki);
+        cdpr.setGains(Kp, Kd, Ki);
     } else {
-        Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd)");
+        Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd Ki)");
     }
-  } else if (cmd.startsWith("SETG")) {
+  } else if (cmd.startsWith("SETGT")) {
     float Kp, Kd;
 
     int firstSpace  = cmd.indexOf(' ');
@@ -117,14 +122,14 @@ void processCommand(String cmd) {
         Kd = cmd.substring(secondSpace + 1).toFloat();
 
         // Example: set gains in your CDPR control object
-        cdpr.setGains(Kp, Kd);
+        cdpr.setGains(Kp, Kd, 0.0f);
 
         Serial.print("OK Gains set: Kp = ");
         Serial.print(Kp);
         Serial.print(", Kd = ");
         Serial.println(Kd);
     } else {
-        Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd)");
+        Serial.println("ERR Invalid SETG command (expected: SETGT Kp Kd)");
     }
   } else if (cmd.startsWith("MOVE")) {
     float x, y, speed;
@@ -194,24 +199,24 @@ void loop() {
     }
   }
 
-  // --- Loop timing measurement ---
-  if (measuring) {
-    loopTimeSum += loopTimer;
-    loopCount++;
+  // // --- Loop timing measurement ---
+  // if (measuring) {
+  //   loopTimeSum += loopTimer;
+  //   loopCount++;
 
-    if (loopCount >= N_LOOPS) {
-      float avgLoopTime = (float)loopTimeSum / loopCount;
-      Serial.print("Average loop time over ");
-      Serial.print(N_LOOPS);
-      Serial.print(" loops: ");
-      Serial.print(avgLoopTime);
-      Serial.println(" us");
+  //   if (loopCount >= N_LOOPS) {
+  //     float avgLoopTime = (float)loopTimeSum / loopCount;
+  //     Serial.print("Average loop time over ");
+  //     Serial.print(N_LOOPS);
+  //     Serial.print(" loops: ");
+  //     Serial.print(avgLoopTime);
+  //     Serial.println(" us");
 
-      // Reset counters to measure again on next N_LOOPS
-      loopTimeSum = 0;
-      loopCount = 0;
-      // Keep measuring for multiple sets
-      // Optionally you can insert a short delay or a trigger condition here
-    }
-  }
+  //     // Reset counters to measure again on next N_LOOPS
+  //     loopTimeSum = 0;
+  //     loopCount = 0;
+  //     // Keep measuring for multiple sets
+  //     // Optionally you can insert a short delay or a trigger condition here
+  //   }
+  // }
 }

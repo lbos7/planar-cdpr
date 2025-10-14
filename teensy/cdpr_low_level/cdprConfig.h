@@ -8,7 +8,7 @@
 // Constants
 constexpr uint32_t CAN_BAUDRATE = 1000000;
 constexpr uint8_t NUM_ODRIVES = 4;
-constexpr float EE_SIDE_LEN = 0.0646;   // meters
+constexpr float EE_SIDE_LEN = 0.0;   // 0.0646 original ee;   // meters
 constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
@@ -17,6 +17,15 @@ constexpr float TENSION_SETPOINT = 25.0; // Newtons
 constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
+constexpr float KP_HOLD = 1200.0;
+constexpr float KD_HOLD = 30.0;
+constexpr float KI_HOLD = 0.0;
+constexpr float KP_TRAJ = 300.0;
+constexpr float KD_TRAJ = 0.0;
+constexpr float TAU = 0.015;
+constexpr float HOLD_THRESH = 0.06;
+constexpr float MAX_TENSION = 50.0;
+constexpr float MIN_TENSION = 8.0;
 
 // ODrive Node IDs
 constexpr uint8_t ODRV0_NODE_ID = 0;
@@ -51,6 +60,15 @@ struct CDPRControlParams {
     float homingVelocity = HOMING_VELOCITY;
     float homingVelThresh = HOMING_VELOCITY_THRESH;
     uint8_t homingCheckThresh = HOMING_CHECK_THRESH;
+    float KpHold = KP_HOLD;
+    float KdHold = KD_HOLD;
+    float KiHold = KI_HOLD;
+    float KpTraj = KP_TRAJ;
+    float KdTraj = KD_TRAJ;
+    float tau = TAU;
+    float holdThesh = HOLD_THRESH;
+    float maxTension = MAX_TENSION;
+    float minTension = MIN_TENSION;
 };
 
 // Struct for cable data (lenghts, tensions, etc.) - same numbering scheme as ODrives
@@ -64,6 +82,7 @@ enum class CDPRState {
     Startup,
     Homed,
     Active,
+    Trajectory,
     Debug
 };
 
