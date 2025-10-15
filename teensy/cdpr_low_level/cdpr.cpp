@@ -2,7 +2,9 @@
 #include "cdprFlexCAN.h"
 #include "eigen.h"
 #include <Eigen/Dense>
+#include <vector>
 #include <Arduino.h>
+#include <math.h>
 
 
 CDPR::CDPR(ODriveCAN** odrives,
@@ -23,7 +25,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->homingVelocity = controlPtr->homingVelocity;
     this->homingVelThresh = controlPtr->homingVelThresh;
     this->homingCheckThresh = controlPtr->homingCheckThresh;
-    this->KpHold = controlPtr->KdHold;
+    this->KpHold = controlPtr->KpHold;
     this->KdHold = controlPtr->KdHold;
     this->KiHold = controlPtr->KiHold;
     this->KpTraj = controlPtr->KpTraj;
@@ -33,6 +35,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->maxTension = controlPtr->maxTension;
     this->minTension = controlPtr->minTension;
     this->robotData = CDPRData();
+    this->waypoints.reserve(50);
 }
 
 bool CDPR::setup() {
@@ -94,9 +97,10 @@ void CDPR::checkState() {
 
     switch (this->robotState) {  // assuming `this->state` is of type CDPRState
         case CDPRState::Startup: stateStr = "Startup"; break;
-        case CDPRState::Active:  stateStr = "Active";  break;
+        case CDPRState::Hold:  stateStr = "Hold";  break;
         case CDPRState::Debug:   stateStr = "Debug";   break;
         case CDPRState::Homed:   stateStr = "Homed";   break;
+        case CDPRState::Waypoint:   stateStr = "Waypoint";   break;
         case CDPRState::Trajectory:   stateStr = "Trajectory";   break;
     }
 
@@ -284,8 +288,11 @@ void CDPR::update() {
         this->eeVel = alpha * eeVelRaw + (1.0f - alpha) * this->eeVel;
         this->prevPos = this->eePos;
     }
-    if (this->robotState == CDPRState::Active) {
-        this->applyHoldController(dt);
+    if (this->robotState == CDPRState::Hold || this->robotState == CDPRState::Waypoint) {
+        this->applyController(dt);
+        if (this->robotState == CDPRState::Waypoint) {
+            this->manageWaypoints();
+        }
     }
 
 
@@ -480,7 +487,7 @@ void CDPR::setDesiredPos(Eigen::Vector2f pos) {
 //     return this->KpHold * this->error + this->KdHold * this->dedt;
 // }
 
-void CDPR::applyHoldController(float dt) {
+void CDPR::applyController(float dt) {
     Serial.println("=== Controller Active ===");
 
     // Compute error
@@ -554,6 +561,49 @@ Eigen::Matrix<float, 4, 2> CDPR::computeCableUnitVecs() {
     }
 
     return unitVecs;
+}
+
+void CDPR::loadSquareTraj(float sideLen, Eigen::Vector2f center) {
+    this->waypoints.clear();
+    this->waypoints.push_back(Eigen::Vector2f(center(0) + sideLen/2, center(1) + sideLen/2));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) - sideLen/2, center(1) + sideLen/2));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) - sideLen/2, center(1) - sideLen/2));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) + sideLen/2, center(1) - sideLen/2));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) + sideLen/2, center(1) + sideLen/2));
+}
+
+void CDPR::loadDiamondTraj(float sideLen, Eigen::Vector2f center) {
+    this->waypoints.clear();
+    float center2CornerDist = sideLen * sqrt(2.0f) / 2.0f;
+    this->waypoints.push_back(Eigen::Vector2f(center(0), center(1) + center2CornerDist));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) - center2CornerDist, center(1)));
+    this->waypoints.push_back(Eigen::Vector2f(center(0), center(1) - center2CornerDist));
+    this->waypoints.push_back(Eigen::Vector2f(center(0) + center2CornerDist, center(1)));
+    this->waypoints.push_back(Eigen::Vector2f(center(0), center(1) + center2CornerDist));
+}
+
+void CDPR::activateWaypoints() {
+    this->robotState = CDPRState::Waypoint;
+    this->currentWaypointInd = 0;
+    this->completedWaypoints = false;
+    this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+}
+
+void CDPR::manageWaypoints() {
+    if (!this->completedWaypoints) {
+        float distThresh = 0.03;
+        float speedThresh = 0.01;
+        float distError = (this->waypoints[currentWaypointInd] - this->eePos).norm();
+        if (distError < distThresh && this->eeVel.norm() < speedThresh) {
+            if (this->currentWaypointInd == this->waypoints.size() - 1) {
+                this->completedWaypoints = true;
+                this->robotState = CDPRState::Hold;
+            } else {
+                this->currentWaypointInd += 1;
+                this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+            }
+        }
+    }
 }
 
 void CDPR::registerCallbacks() {

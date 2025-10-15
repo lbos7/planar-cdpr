@@ -13,18 +13,18 @@ constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
 constexpr float WORKSPACE_BORDER_OFFSET = 0.0254;   // meters
-constexpr float TENSION_SETPOINT = 25.0; // Newtons
+constexpr float TENSION_SETPOINT = 30.0; // Newtons
 constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
-constexpr float KP_HOLD = 1200.0;
-constexpr float KD_HOLD = 30.0;
-constexpr float KI_HOLD = 0.0;
+constexpr float KP_HOLD = 1500.0;
+constexpr float KD_HOLD = 50.0;
+constexpr float KI_HOLD = 900.0;
 constexpr float KP_TRAJ = 300.0;
 constexpr float KD_TRAJ = 0.0;
 constexpr float TAU = 0.015;
 constexpr float HOLD_THRESH = 0.06;
-constexpr float MAX_TENSION = 50.0;
+constexpr float MAX_TENSION = 55.0;
 constexpr float MIN_TENSION = 8.0;
 
 // ODrive Node IDs
@@ -81,8 +81,9 @@ struct CDPRData {
 enum class CDPRState {
     Startup,
     Homed,
-    Active,
+    Hold,
     Trajectory,
+    Waypoint,
     Debug
 };
 

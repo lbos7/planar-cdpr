@@ -52,7 +52,7 @@ void processCommand(String cmd) {
     cdpr.setState(CDPRState::Homed);
     cdpr.pretensionSetup();
     cdpr.addPretension();
-    cdpr.setState(CDPRState::Active);
+    cdpr.setState(CDPRState::Hold);
   } else if (cmd == "TENSION") {
     cdpr.addPretension();
   } else if (cmd == "SETUPT") {
@@ -72,8 +72,8 @@ void processCommand(String cmd) {
     String stateStr = cmd.substring(5);
     CDPRState newState;
 
-    if (stateStr == "ACTIVE") {
-        newState = CDPRState::Active;
+    if (stateStr == "HOLD") {
+        newState = CDPRState::Hold;
     } else if (stateStr == "DEBUG") {
         newState = CDPRState::Debug;
     } else {
@@ -131,6 +131,52 @@ void processCommand(String cmd) {
     } else {
         Serial.println("ERR Invalid SETG command (expected: SETGT Kp Kd)");
     }
+  } else if (cmd.startsWith("LOADS")) {
+    float sideLen, x, y;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+    int thirdSpace  = cmd.indexOf(' ', secondSpace + 1);
+
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+        // If thirdSpace == -1, there are exactly 3 arguments (x, y, speed)
+        if (thirdSpace == -1) thirdSpace = cmd.length();
+
+        sideLen = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        x = cmd.substring(secondSpace + 1, thirdSpace).toFloat();
+        y = cmd.substring(thirdSpace + 1).toFloat();
+
+        // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        Serial.printf("Loaded Square Waypoints with side length: %.3f & centered @ x=%.3f, y=%.3f\n", sideLen, x, y);
+        cdpr.loadSquareTraj(sideLen, Eigen::Vector2f(x, y));
+    } else {
+        Serial.println("ERR Invalid MOVE command (expected: LOADS sideLen x y)");
+    }
+  } else if (cmd.startsWith("LOADD")) {
+    float sideLen, x, y;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+    int thirdSpace  = cmd.indexOf(' ', secondSpace + 1);
+
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+        // If thirdSpace == -1, there are exactly 3 arguments (x, y, speed)
+        if (thirdSpace == -1) thirdSpace = cmd.length();
+
+        sideLen = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        x = cmd.substring(secondSpace + 1, thirdSpace).toFloat();
+        y = cmd.substring(thirdSpace + 1).toFloat();
+
+        // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        Serial.printf("Loaded Diamond Waypoints with side length: %.3f & centered @ x=%.3f, y=%.3f\n", sideLen, x, y);
+        cdpr.loadDiamondTraj(sideLen, Eigen::Vector2f(x, y));
+    } else {
+        Serial.println("ERR Invalid MOVE command (expected: LOADD sideLen x y)");
+    }
+  } else if (cmd == "WAYPOINTS") {
+    cdpr.activateWaypoints();
   } else if (cmd.startsWith("MOVE")) {
     float x, y, speed;
 

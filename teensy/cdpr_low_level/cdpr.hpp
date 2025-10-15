@@ -6,6 +6,7 @@
 #include "cdprConfig.h"
 #include "eigen.h"
 #include <Eigen/Dense>
+#include <vector>
 
 
 class CDPR {
@@ -41,10 +42,14 @@ class CDPR {
         // void startTraj(Eigen::Vector2f goal, float speed);
         // void updateTraj();
         void setDesiredPos(Eigen::Vector2f pos);
-        void applyHoldController(float dt);
+        void applyController(float dt);
         void applyTrajController();
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
+        void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
+        void loadDiamondTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
+        void activateWaypoints();
+        void manageWaypoints();
 
     private:
         ODriveCAN** odrives;
@@ -91,6 +96,9 @@ class CDPR {
         Eigen::Vector2f dedt = Eigen::Vector2f::Zero();
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
         float prevUpdateTime = 0.0;
+        std::vector<Eigen::Vector2f> waypoints;
+        uint8_t currentWaypointInd = 0;
+        bool completedWaypoints = false;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);
