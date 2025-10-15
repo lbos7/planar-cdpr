@@ -52,7 +52,7 @@ void processCommand(String cmd) {
     cdpr.setState(CDPRState::Homed);
     cdpr.pretensionSetup();
     cdpr.addPretension();
-    cdpr.setState(CDPRState::Hold);
+    cdpr.setState(CDPRState::Active);
   } else if (cmd == "TENSION") {
     cdpr.addPretension();
   } else if (cmd == "SETUPT") {
@@ -72,8 +72,8 @@ void processCommand(String cmd) {
     String stateStr = cmd.substring(5);
     CDPRState newState;
 
-    if (stateStr == "HOLD") {
-        newState = CDPRState::Hold;
+    if (stateStr == "ACTIVE") {
+        newState = CDPRState::Active;
     } else if (stateStr == "DEBUG") {
         newState = CDPRState::Debug;
     } else {
@@ -109,27 +109,6 @@ void processCommand(String cmd) {
         cdpr.setGains(Kp, Kd, Ki);
     } else {
         Serial.println("ERR Invalid SETG command (expected: SETG Kp Kd Ki)");
-    }
-  } else if (cmd.startsWith("SETGT")) {
-    float Kp, Kd;
-
-    int firstSpace  = cmd.indexOf(' ');
-    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
-
-    // Need exactly 2 numbers
-    if (firstSpace > 0 && secondSpace > firstSpace) {
-        Kp = cmd.substring(firstSpace + 1, secondSpace).toFloat();
-        Kd = cmd.substring(secondSpace + 1).toFloat();
-
-        // Example: set gains in your CDPR control object
-        cdpr.setGains(Kp, Kd, 0.0f);
-
-        Serial.print("OK Gains set: Kp = ");
-        Serial.print(Kp);
-        Serial.print(", Kd = ");
-        Serial.println(Kd);
-    } else {
-        Serial.println("ERR Invalid SETG command (expected: SETGT Kp Kd)");
     }
   } else if (cmd.startsWith("LOADS")) {
     float sideLen, x, y;
@@ -177,7 +156,36 @@ void processCommand(String cmd) {
     }
   } else if (cmd == "WAYPOINTS") {
     cdpr.activateWaypoints();
+  } else if (cmd.startsWith("TWAYPOINTS")) {
+    float speed;
+    int firstSpace  = cmd.indexOf(' ');
+
+    if (firstSpace > 0) {
+      speed = cmd.substring(firstSpace + 1).toFloat();
+      cdpr.activateWaypointsTraj(speed);
+    } else {
+        Serial.println("ERR Invalid WAYPOINTST command (expected: WAYPOINTST speed)");
+    }
   } else if (cmd.startsWith("MOVE")) {
+    float x, y;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+
+        x = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        y = cmd.substring(secondSpace + 1).toFloat();
+
+        // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        Serial.print("OK Changing Desired Pos to (");
+        Serial.print(x); Serial.print(", "); Serial.println(y);
+        cdpr.setDesiredPos(Eigen::Vector2f(x, y));
+    } else {
+        Serial.println("ERR Invalid MOVE command (expected: MOVE x y)");
+    }
+  } else if (cmd.startsWith("TMOVE")) {
     float x, y, speed;
 
     int firstSpace  = cmd.indexOf(' ');
@@ -197,7 +205,7 @@ void processCommand(String cmd) {
         Serial.print("OK Starting trajectory to (");
         Serial.print(x); Serial.print(", "); Serial.print(y);
         Serial.print(") @ "); Serial.print(speed); Serial.println(" m/s");
-        cdpr.setDesiredPos(Eigen::Vector2f(x, y));
+        cdpr.generateTrajVars(Eigen::Vector2f(x, y), speed);
     } else {
         Serial.println("ERR Invalid MOVE command (expected: MOVE x y speed)");
     }

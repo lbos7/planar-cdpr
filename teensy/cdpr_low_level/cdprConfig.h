@@ -17,11 +17,9 @@ constexpr float TENSION_SETPOINT = 30.0; // Newtons
 constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
-constexpr float KP_HOLD = 1500.0;
-constexpr float KD_HOLD = 50.0;
-constexpr float KI_HOLD = 900.0;
-constexpr float KP_TRAJ = 300.0;
-constexpr float KD_TRAJ = 0.0;
+constexpr float KP = 1500.0;
+constexpr float KD = 50.0;
+constexpr float KI = 900.0;
 constexpr float TAU = 0.015;
 constexpr float HOLD_THRESH = 0.06;
 constexpr float MAX_TENSION = 55.0;
@@ -60,11 +58,9 @@ struct CDPRControlParams {
     float homingVelocity = HOMING_VELOCITY;
     float homingVelThresh = HOMING_VELOCITY_THRESH;
     uint8_t homingCheckThresh = HOMING_CHECK_THRESH;
-    float KpHold = KP_HOLD;
-    float KdHold = KD_HOLD;
-    float KiHold = KI_HOLD;
-    float KpTraj = KP_TRAJ;
-    float KdTraj = KD_TRAJ;
+    float Kp = KP;
+    float Kd = KD;
+    float Ki = KI;
     float tau = TAU;
     float holdThesh = HOLD_THRESH;
     float maxTension = MAX_TENSION;
@@ -81,8 +77,7 @@ struct CDPRData {
 enum class CDPRState {
     Startup,
     Homed,
-    Hold,
-    Trajectory,
+    Active,
     Waypoint,
     Debug
 };

@@ -43,13 +43,15 @@ class CDPR {
         // void updateTraj();
         void setDesiredPos(Eigen::Vector2f pos);
         void applyController(float dt);
-        void applyTrajController();
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
         void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
         void loadDiamondTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
         void activateWaypoints();
+        void activateWaypointsTraj(float speed);
+        void generateTrajVars(Eigen::Vector2f goalPos, float speed);
         void manageWaypoints();
+        void updateTraj(float dt);
 
     private:
         ODriveCAN** odrives;
@@ -65,11 +67,9 @@ class CDPR {
         float homingVelocity;
         float homingVelThresh;
         uint8_t homingCheckThresh;
-        float KpHold;
-        float KdHold;
-        float KiHold;
-        float KpTraj;
-        float KdTraj;
+        float Kp;
+        float Kd;
+        float Ki;
         float tau;
         float holdThresh;
         float maxTension;
@@ -80,12 +80,14 @@ class CDPR {
         bool completedHoming = false;
         bool completedPretension = false;
         bool trajActive = false;
+        float trajSpeed = 0.0;
         bool hold = false;
-        float trajStartTime = 0.0;
-        float trajDuration = 0.0;
-        float lastUpdateTime = 0.0;
+        float s = 0.0;
+        float segmentLen = 0.0;
+        Eigen::Vector2f segmentDir = Eigen::Vector2f::Zero();
         Eigen::Vector2f startPos = Eigen::Vector2f::Zero();
         Eigen::Vector2f goalPos = Eigen::Vector2f::Zero();
+        Eigen::Vector2f intermediatePos = Eigen::Vector2f::Zero();
         Eigen::Vector2f eePos = Eigen::Vector2f::Zero();
         Eigen::Vector2f desiredPos = Eigen::Vector2f::Zero();
         Eigen::Vector2f eeVel = Eigen::Vector2f::Zero();
@@ -98,7 +100,9 @@ class CDPR {
         float prevUpdateTime = 0.0;
         std::vector<Eigen::Vector2f> waypoints;
         uint8_t currentWaypointInd = 0;
+        float waypointSpeed = 0.0;
         bool completedWaypoints = false;
+        bool useWaypointsTraj = false;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);
