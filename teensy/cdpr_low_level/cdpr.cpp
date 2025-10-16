@@ -534,6 +534,7 @@ void CDPR::manageWaypoints() {
             if (this->currentWaypointInd == this->waypoints.size() - 1) {
                 this->completedWaypoints = true;
                 this->robotState = CDPRState::Active;
+                Serial.println("done");
             } else {
                 this->currentWaypointInd += 1;
                 if (this->useWaypointsTraj) {

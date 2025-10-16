@@ -7,6 +7,14 @@
   <maintainer email="loganstuartboswell@gmail.com">Logan Boswell</maintainer>
   <license>TODO: License declaration</license>
 
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>cdpr_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

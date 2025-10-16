@@ -234,7 +234,7 @@ void setup() {
   cdpr.setState(CDPRState::Homed);
   cdpr.pretensionSetup();
   cdpr.addPretension();
-  cdpr.setState(CDPRState::Debug);
+  cdpr.setState(CDPRState::Active);
 }
 
 void loop() {

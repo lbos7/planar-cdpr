@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Move.srv"
   "srv/TrajMove.srv"
   "srv/Waypoint.srv"
+  "src/ActivateTrajWaypoint.srv"
   DEPENDENCIES geometry_msgs
   )
 
