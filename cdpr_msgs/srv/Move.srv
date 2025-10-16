@@ -1,3 +1,3 @@
-std_msgs/float64 x # goal x-coordinate (meters)
-std_msgs/float64 y # goal y-coordinate (meters)
+float64 x # goal x-coordinate (meters)
+float64 y # goal y-coordinate (meters)
 ---

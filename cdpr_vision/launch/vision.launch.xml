@@ -9,7 +9,7 @@
     <node pkg="cdpr_vision" exec="tracker"/>
 
     <node pkg='apriltag_ros' exec='apriltag_node' args='--ros-args --log-level error'>
-        <param from='$(find-pkg-share pingpongbot_vision)/config/tags.yaml'/>
+        <param from='$(find-pkg-share cdpr_vision)/config/tags.yaml'/>
         <remap from='image_rect' to='/camera/camera/color/image_raw'/>
         <remap from='camera_info' to='/camera/camera/camera_info'/>
     </node>

@@ -1,2 +1,2 @@
-std_msgs/float64 speed  # ee movement speed
+float64 speed  # ee movement speed
 ---

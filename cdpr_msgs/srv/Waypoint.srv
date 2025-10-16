@@ -1,4 +1,4 @@
-std_msgs/float64 side_len   # shape side length (meters)
-std_msgs/float64 x 0.0  # shape centerpoint x-coordinate (meters)
-std_msgs/float64 y 0.0  # shape centerpoint y-coordinate (meters)
+float64 side_len   # shape side length (meters)
+float64 x 0.0  # shape centerpoint x-coordinate (meters)
+float64 y 0.0  # shape centerpoint y-coordinate (meters)
 ---
