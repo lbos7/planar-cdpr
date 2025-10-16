@@ -292,6 +292,7 @@ void CDPR::update() {
         }
         this->applyController(dt);
         if (this->robotState == CDPRState::Waypoint) {
+            Serial.printf("%.5f,%.5f\n", this->eePos(0), this->eePos(1));
             this->manageWaypoints();
         }
     }
