@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 def serial_write(ser, data):
     try:
@@ -22,3 +23,7 @@ def serial_read_thread(ser, queue, tracking_flag):
                 queue.append(line)
         else:
             time.sleep(0.001)
+
+def find_teensy_port():
+    matches = sorted(Path("/dev").glob("ttyACM*"))
+    return str(matches[0]) if matches else None

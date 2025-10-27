@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import serial
 import threading
 from collections import deque
-from cdpr_vision.cdpr_serial import serial_read_thread, serial_write
+from cdpr_vision.cdpr_serial import serial_read_thread, serial_write, find_teensy_port
 
 
 class Tracker(Node):
@@ -38,7 +38,7 @@ class Tracker(Node):
         self.tf_listener = TransformListener(self.buffer, self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self, qos)
 
-        self.ser = serial.Serial("/dev/ttyACM0", 115200, timeout=0.01)
+        self.ser = serial.Serial(find_teensy_port(), 115200, timeout=0.01)
         self.queue = deque(maxlen=500)
         self.tracking_flag = [False]
         self.thread = threading.Thread(target=serial_read_thread,
