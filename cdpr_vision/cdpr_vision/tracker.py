@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import serial
 import threading
 from collections import deque
-from cdpr_vision.cdpr_serial import serial_read_thread, serial_write
+from cdpr_vision.cdpr_serial import serial_read_thread, serial_write, find_teensy_port
 
 
 class Tracker(Node):
@@ -26,6 +26,7 @@ class Tracker(Node):
 
         self.timer = self.create_timer(1/300, self.timer_callback)
 
+        self.home_service = self.create_service(Empty, "home", self.home_callback)
         self.move_service = self.create_service(Move, "move", self.move_callback)
         self.move_traj_service = self.create_service(TrajMove, "move_traj", self.move_traj_callback)
         self.load_square_service = self.create_service(Waypoint, "load_square", self.load_square_callback)
@@ -38,7 +39,8 @@ class Tracker(Node):
         self.tf_listener = TransformListener(self.buffer, self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self, qos)
 
-        self.ser = serial.Serial("/dev/ttyACM0", 115200, timeout=0.01)
+        teensy_port = find_teensy_port()
+        self.ser = serial.Serial(teensy_port, 115200, timeout=0.01)
         self.queue = deque(maxlen=500)
         self.tracking_flag = [False]
         self.thread = threading.Thread(target=serial_read_thread,
@@ -46,33 +48,11 @@ class Tracker(Node):
                                        daemon=True)
         self.thread.start()
 
-        # # Wait until the required frames exist
-        # self.get_logger().info("Waiting for transform 'frame_tag' -> 'ee_tag'...")
-
-        # while rclpy.ok():
-        #     try:
-        #         # latest transform
-        #         t = self.buffer.lookup_transform(
-        #             target_frame='frame_tag',
-        #             source_frame='ee_tag')
-        #         self.get_logger().info("Transform found!")
-        #         break
-        #     except Exception:
-        #         time.sleep(0.05)  # avoid busy wait
-        
-        # frame2center = TransformStamped()
-        # frame2center.header.stamp = self.get_clock().now().to_msg()
-        # frame2center.header.frame_id = 'frame_tag'
-        # frame2center.child_frame_id = 'center'
-        # frame2center.transform.translation.y = -.53965
-        # frame2center.transform.translation.z = -.1052592
-        # self.static_tf_broadcaster.sendTransform(frame2center)
-        # self.get_logger().info("Static transform published from frame_tag -> center")
-
         self.ee_pos_array = np.empty((0, 2))
         self.apriltag_pos_array = np.empty((0, 2))
         self.waypoints = np.empty((0, 2))
         self.use_traj = False
+        self.traj_speed = 0.0
         self.center_frame_defined = False
 
     def timer_callback(self):
@@ -124,6 +104,11 @@ class Tracker(Node):
                 self.apriltag_pos_array = np.vstack([self.apriltag_pos_array, np.array([x, y])])
             except Exception:
                 pass
+
+    def home_callback(self, request, response):
+        cmd = f"move 0 0\n"
+        serial_write(self.ser, cmd)
+        return response
 
     def move_callback(self, request, response):
         x = request.x
@@ -186,22 +171,24 @@ class Tracker(Node):
     def track_traj_callback(self, request, response):
         self.use_traj = True
         speed = request.speed
+        self.traj_speed = speed
         cmd = f"twaypoints {speed:.3f}\n"
         serial_write(self.ser, cmd)
         self.start_tracking()
         return response
     
-    def plot_callback(self, reqest, response):
+    def plot_callback(self, request, response):
         plt.plot(self.waypoints[:, 0], self.waypoints[:, 1], '-ok')
         plt.plot(self.ee_pos_array[:, 0], self.ee_pos_array[:, 1], '-r')
-        plt.plot(self.apriltag_pos_array[:, 0], self.apriltag_pos_array[:, 1], '-b')
-        plt.legend(["Ideal Path", "Estimated EE Pos", "Actual EE Pos"])
+        # plt.plot(self.apriltag_pos_array[:, 0], self.apriltag_pos_array[:, 1], '-b')
+        plt.legend(["Ideal Path", "Estimated EE Pos"])
+        # plt.legend(["Ideal Path", "Estimated EE Pos", "Actual EE Pos"])
         plt.xlabel("x (m)")
         plt.ylabel("y (m)")
         if self.use_traj:
-            plt.title("EE Movement Performance - Trajectory Control")
+            plt.title(f"EE Movement Performance (FK Estimate) - Trajectory Control @ {self.traj_speed} m/s")
         else:
-            plt.title("EE Movement Performance - Position Control")
+            plt.title("EE Movement Performance (FK Estimate) - Position Control")
         plt.show()
         return response
 
