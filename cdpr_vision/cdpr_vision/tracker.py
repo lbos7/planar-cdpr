@@ -188,7 +188,7 @@ class Tracker(Node):
         if self.use_traj:
             plt.title(f"EE Movement Performance (FK Estimate) - Trajectory Control @ {self.traj_speed} m/s")
         else:
-            plt.title("EE Movement Performance (FK Estimate) - Position Control")
+            plt.title("EE Movement Performance (FK Estimate) - Setpoint Control")
         plt.show()
         return response
 
