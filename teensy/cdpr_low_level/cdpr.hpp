@@ -23,6 +23,7 @@ class CDPR {
         void checkEEPos();
         void checkState();
         void checkGains();
+        void checkTensionsAtPos();
         void homingSequence();
         void pretensionSetup();
         void addPretension();
@@ -39,11 +40,10 @@ class CDPR {
         float torque2Tension(float torque);
         float tension2Torque(float tension);
         void changeTensionSetpoint(float tensionSetpoint);
-        // void startTraj(Eigen::Vector2f goal, float speed);
-        // void updateTraj();
         void setDesiredPos(Eigen::Vector2f pos);
         void applyController(float dt);
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
+        Eigen::Vector2f computeForceFromTensions(Eigen::Vector4f &tensions);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
         void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
         void loadDiamondTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
@@ -52,6 +52,8 @@ class CDPR {
         void generateTrajVars(Eigen::Vector2f goalPos, float speed);
         void manageWaypoints();
         void updateTraj(float dt);
+        void startGridTest();
+        void updateGridTest();
 
     private:
         ODriveCAN** odrives;
@@ -103,6 +105,16 @@ class CDPR {
         float waypointSpeed = 0.0;
         bool completedWaypoints = false;
         bool useWaypointsTraj = false;
+        float gridTestSpeed = 0.5;
+        uint8_t gridIndX = 0;
+        uint8_t gridIndY = 0;
+        float gridCheckpoints[12] = {
+            -0.393475, -0.321934, -0.250393, -0.178852,
+            -0.107311, -0.035770, 0.035770, 0.107311,
+            0.178852, 0.250393, 0.321934, 0.393475
+        };
+        bool firstGridPoint = true;
+        Eigen::Vector2f lastLoggedPos = Eigen::Vector2f::Zero();
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

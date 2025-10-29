@@ -8,7 +8,7 @@
 // Constants
 constexpr uint32_t CAN_BAUDRATE = 1000000;
 constexpr uint8_t NUM_ODRIVES = 4;
-constexpr float EE_SIDE_LEN = 0.0;   // 0.0646 original ee;   // meters
+constexpr float EE_SIDE_LEN = 0.0426;   // 0.0646 original ee;   // meters
 constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
@@ -79,6 +79,7 @@ enum class CDPRState {
     Homed,
     Active,
     Waypoint,
+    GridTest,
     Debug
 };
 

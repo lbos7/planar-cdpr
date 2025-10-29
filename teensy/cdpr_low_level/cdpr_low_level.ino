@@ -68,6 +68,10 @@ void processCommand(String cmd) {
     cdpr.checkState();
   } else if (cmd == "CHECKG") {
     cdpr.checkGains();
+  } else if (cmd == "CHECKF") {
+    cdpr.checkTensionsAtPos();
+  } else if (cmd == "GRIDTEST") {
+    cdpr.startGridTest();
   } else if (cmd.startsWith("SETS ")) {
     String stateStr = cmd.substring(5);
     CDPRState newState;
@@ -130,7 +134,7 @@ void processCommand(String cmd) {
         Serial.printf("Loaded Square Waypoints with side length: %.3f & centered @ x=%.3f, y=%.3f\n", sideLen, x, y);
         cdpr.loadSquareTraj(sideLen, Eigen::Vector2f(x, y));
     } else {
-        Serial.println("ERR Invalid MOVE command (expected: LOADS sideLen x y)");
+        Serial.println("ERR Invalid LOADS command (expected: LOADS sideLen x y)");
     }
   } else if (cmd.startsWith("LOADD")) {
     float sideLen, x, y;
@@ -152,7 +156,7 @@ void processCommand(String cmd) {
         Serial.printf("Loaded Diamond Waypoints with side length: %.3f & centered @ x=%.3f, y=%.3f\n", sideLen, x, y);
         cdpr.loadDiamondTraj(sideLen, Eigen::Vector2f(x, y));
     } else {
-        Serial.println("ERR Invalid MOVE command (expected: LOADD sideLen x y)");
+        Serial.println("ERR Invalid LOADD command (expected: LOADD sideLen x y)");
     }
   } else if (cmd == "WAYPOINTS") {
     cdpr.activateWaypoints();
@@ -179,8 +183,8 @@ void processCommand(String cmd) {
         y = cmd.substring(secondSpace + 1).toFloat();
 
         // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
-        Serial.print("OK Changing Desired Pos to (");
-        Serial.print(x); Serial.print(", "); Serial.println(y);
+        // Serial.print("OK Changing Desired Pos to (");
+        // Serial.print(x); Serial.print(", "); Serial.println(y);
         cdpr.setDesiredPos(Eigen::Vector2f(x, y));
     } else {
         Serial.println("ERR Invalid MOVE command (expected: MOVE x y)");
@@ -202,9 +206,9 @@ void processCommand(String cmd) {
         speed = cmd.substring(thirdSpace + 1).toFloat();
 
         // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
-        Serial.print("OK Starting trajectory to (");
-        Serial.print(x); Serial.print(", "); Serial.print(y);
-        Serial.print(") @ "); Serial.print(speed); Serial.println(" m/s");
+        // Serial.print("OK Starting trajectory to (");
+        // Serial.print(x); Serial.print(", "); Serial.print(y);
+        // Serial.print(") @ "); Serial.print(speed); Serial.println(" m/s");
         cdpr.generateTrajVars(Eigen::Vector2f(x, y), speed);
     } else {
         Serial.println("ERR Invalid MOVE command (expected: MOVE x y speed)");

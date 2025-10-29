@@ -99,6 +99,7 @@ void CDPR::checkState() {
         case CDPRState::Debug:   stateStr = "Debug";   break;
         case CDPRState::Homed:   stateStr = "Homed";   break;
         case CDPRState::Waypoint:   stateStr = "Waypoint";   break;
+        case CDPRState::GridTest:   stateStr = "GridTest";   break;
     }
 
     Serial.print("Current State: ");
@@ -108,6 +109,11 @@ void CDPR::checkState() {
 void CDPR::checkGains() {
 
     Serial.printf("Kp: %0.3f\tKd: %0.3f\tKi: %0.3f\n", this->Kp, this->Kd, this->Ki);
+}
+
+void CDPR::checkTensionsAtPos() {
+    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f\n", this->eePos(0), this->eePos(1), this->robotData.tensions(0),
+    this->robotData.tensions(1), this->robotData.tensions(2), this->robotData.tensions(3), (this->desiredPos - this->eePos).norm());
 }
 
 void CDPR::homingSequence() {
@@ -285,15 +291,19 @@ void CDPR::update() {
         this->eeVel = alpha * eeVelRaw + (1.0f - alpha) * this->eeVel;
         this->prevPos = this->eePos;
     }
-    if (this->robotState == CDPRState::Active || this->robotState == CDPRState::Waypoint) {
+    if (this->robotState == CDPRState::Active || this->robotState == CDPRState::Waypoint || this->robotState == CDPRState::GridTest) {
         if (!this->hold) {
             // Serial.println("Updating Traj");
             this->updateTraj(dt);
         }
+
         this->applyController(dt);
+
         if (this->robotState == CDPRState::Waypoint) {
             Serial.printf("%.5f,%.5f\n", this->eePos(0), this->eePos(1));
             this->manageWaypoints();
+        } else if (this->robotState == CDPRState::GridTest) {
+            this->updateGridTest();
         }
     }
 
@@ -464,7 +474,14 @@ Eigen::Vector4f CDPR::computeTensionsFromForce(Eigen::Vector2f &force) {
     Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
     Eigen::Vector4f tensionAdjustments = A * (A.transpose() * A).inverse() * force;
     Eigen::Vector4f tensions = tensionAdjustments.array() + this->tensionSetpoint;
-    return tensions.cwiseMax(5.0f);
+    return tensions.cwiseMax(this->minTension);
+}
+
+Eigen::Vector2f CDPR::computeForceFromTensions(Eigen::Vector4f &tensions) {
+    Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
+    Eigen::Vector4f tensionAdjustments = tensions.array() - this->tensionSetpoint;
+    Eigen::Vector2f force = A.transpose() * tensionAdjustments;
+    return force;
 }
 
 Eigen::Matrix<float, 4, 2> CDPR::computeCableUnitVecs() {
@@ -577,6 +594,56 @@ void CDPR::updateTraj(float dt) {
         this->desiredVel.setZero();
         this->hold = true; // Switch to hold mode
         this->intError = this->desiredPos - this->eePos;
+    }
+}
+
+void CDPR::startGridTest() {
+    this->gridIndX = 0;
+    this->gridIndY = 0;
+    this->firstGridPoint = true;
+    this->lastLoggedPos = this->eePos;
+    this->robotState = CDPRState::GridTest;
+}
+
+void CDPR::updateGridTest() {
+
+    if (this->firstGridPoint) {
+        float targetX = this->gridCheckpoints[this->gridIndX];
+        float targetY = this->gridCheckpoints[this->gridIndY];
+        Eigen::Vector2f targetPos(targetX, targetY);
+        this->generateTrajVars(targetPos, this->gridTestSpeed);
+        this->firstGridPoint = false;
+    }
+
+    if (this->eeVel.norm() < 0.005f && (this->eePos - this->lastLoggedPos).norm() > 0.02) {
+
+        this->checkTensionsAtPos();
+        this->lastLoggedPos = this->eePos;
+
+        if (this->gridIndY % 2 == 0) {
+            this->gridIndX++;
+            if (this->gridIndX >= 12) {
+                this->gridIndX = 11;
+                this->gridIndY++;
+            }
+        } else {
+            this->gridIndX--;
+            if (this->gridIndX < 0) {
+                this->gridIndX = 0;
+                this->gridIndY++;
+            }
+        }
+
+        if (this->gridIndY >= 12) {
+            this->gridIndY = 0;
+            this->gridIndX = 0;
+            this->robotState = CDPRState::Active;
+        } else {
+            float targetX = this->gridCheckpoints[this->gridIndX];
+            float targetY = this->gridCheckpoints[this->gridIndY];
+            Eigen::Vector2f targetPos(targetX, targetY);
+            this->generateTrajVars(targetPos, this->gridTestSpeed);
+        }
     }
 }
 
