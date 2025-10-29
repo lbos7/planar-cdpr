@@ -105,13 +105,18 @@ class CDPR {
         float waypointSpeed = 0.0;
         bool completedWaypoints = false;
         bool useWaypointsTraj = false;
-        float gridTestSpeed = 0.5;
-        uint8_t gridIndX = 0;
-        uint8_t gridIndY = 0;
-        float gridCheckpoints[12] = {
-            -0.393475, -0.321934, -0.250393, -0.178852,
-            -0.107311, -0.035770, 0.035770, 0.107311,
-            0.178852, 0.250393, 0.321934, 0.393475
+        float gridTestSpeed = 0.25;
+        int gridIndX = 0;
+        int gridIndY = 0;
+        // float gridCheckpoints[12] = {
+        //     -0.393475, -0.321934, -0.250393, -0.178852,
+        //     -0.107311, -0.035770, 0.035770, 0.107311,
+        //     0.178852, 0.250393, 0.321934, 0.393475
+        // };
+        float gridCheckpoints[11] = {
+            -0.393475, -0.314543, -0.235611, -0.156679,
+            -0.077747,  0.001185,  0.080117,  0.159049,
+            0.237981,  0.316913,  0.395845
         };
         bool firstGridPoint = true;
         Eigen::Vector2f lastLoggedPos = Eigen::Vector2f::Zero();

@@ -112,8 +112,8 @@ void CDPR::checkGains() {
 }
 
 void CDPR::checkTensionsAtPos() {
-    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f\n", this->eePos(0), this->eePos(1), this->robotData.tensions(0),
-    this->robotData.tensions(1), this->robotData.tensions(2), this->robotData.tensions(3), (this->desiredPos - this->eePos).norm());
+    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%d,%d\n", this->eePos(0), this->eePos(1), this->robotData.tensions(0),
+    this->robotData.tensions(1), this->robotData.tensions(2), this->robotData.tensions(3), (this->desiredPos - this->eePos).norm(), this->gridIndX, this->gridIndY);
 }
 
 void CDPR::homingSequence() {
@@ -605,6 +605,48 @@ void CDPR::startGridTest() {
     this->robotState = CDPRState::GridTest;
 }
 
+// void CDPR::updateGridTest() {
+
+//     if (this->firstGridPoint) {
+//         float targetX = this->gridCheckpoints[this->gridIndX];
+//         float targetY = this->gridCheckpoints[this->gridIndY];
+//         Eigen::Vector2f targetPos(targetX, targetY);
+//         this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         this->firstGridPoint = false;
+//     }
+
+//     if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+//         delay(1000);
+//         this->checkTensionsAtPos();
+//         this->lastLoggedPos = this->eePos;
+
+//         if (this->gridIndY % 2 == 0) {
+//             this->gridIndX++;
+//             if (this->gridIndX >= 11) {
+//                 this->gridIndX = 10;
+//                 this->gridIndY++;
+//             }
+//         } else {
+//             this->gridIndX--;
+//             if (this->gridIndX < 0) {
+//                 this->gridIndX = 0;
+//                 this->gridIndY++;
+//             }
+//         }
+
+//         if (this->gridIndY >= 11) {
+//             this->gridIndY = 0;
+//             this->gridIndX = 0;
+//             this->robotState = CDPRState::Active;
+//         } else {
+//             float targetX = this->gridCheckpoints[this->gridIndX];
+//             float targetY = this->gridCheckpoints[this->gridIndY];
+//             Eigen::Vector2f targetPos(targetX, targetY);
+//             this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         }
+//     }
+// }
+
 void CDPR::updateGridTest() {
 
     if (this->firstGridPoint) {
@@ -615,28 +657,28 @@ void CDPR::updateGridTest() {
         this->firstGridPoint = false;
     }
 
-    if (this->eeVel.norm() < 0.005f && (this->eePos - this->lastLoggedPos).norm() > 0.02) {
-
+    if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+        delay(1000);
         this->checkTensionsAtPos();
         this->lastLoggedPos = this->eePos;
 
-        if (this->gridIndY % 2 == 0) {
-            this->gridIndX++;
-            if (this->gridIndX >= 12) {
-                this->gridIndX = 11;
-                this->gridIndY++;
+        if (this->gridIndX % 2 == 0) {
+            this->gridIndY++;
+            if (this->gridIndY >= 11) {
+                this->gridIndY = 10;
+                this->gridIndX++;
             }
         } else {
-            this->gridIndX--;
-            if (this->gridIndX < 0) {
-                this->gridIndX = 0;
-                this->gridIndY++;
+            this->gridIndY--;
+            if (this->gridIndY < 0) {
+                this->gridIndY = 0;
+                this->gridIndX++;
             }
         }
 
-        if (this->gridIndY >= 12) {
-            this->gridIndY = 0;
+        if (this->gridIndX >= 11) {
             this->gridIndX = 0;
+            this->gridIndY = 0;
             this->robotState = CDPRState::Active;
         } else {
             float targetX = this->gridCheckpoints[this->gridIndX];
