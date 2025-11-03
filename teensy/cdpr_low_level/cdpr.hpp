@@ -54,6 +54,7 @@ class CDPR {
         void updateTraj(float dt);
         void startGridTest();
         void updateGridTest();
+        Eigen::Matrix<float, 10, 1> computeFFBasis();
 
     private:
         ODriveCAN** odrives;
@@ -76,6 +77,7 @@ class CDPR {
         float holdThresh;
         float maxTension;
         float minTension;
+        Eigen::Matrix<float, 4, 10> ffCoeffs;
         Eigen::Vector2f intError = Eigen::Vector2f::Zero();
         CDPRData robotData;
         CDPRState robotState = CDPRState::Startup;

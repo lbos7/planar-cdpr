@@ -32,6 +32,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->holdThresh = controlPtr->holdThesh;
     this->maxTension = controlPtr->maxTension;
     this->minTension = controlPtr->minTension;
+    this->ffCoeffs = controlPtr->ffCoeffs;
     this->robotData = CDPRData();
     this->waypoints.reserve(50);
 }
@@ -687,6 +688,14 @@ void CDPR::updateGridTest() {
             this->generateTrajVars(targetPos, this->gridTestSpeed);
         }
     }
+}
+
+Eigen::Matrix<float, 10, 1> CDPR::computeFFBasis() {
+    Eigen::Matrix<float, 10, 1> basis;
+    float x = this->desiredPos(0);
+    float y = this->desiredPos(1);
+    basis << 1, x, y, x*x, x*y, y*y, x*x*x, x*x*y, x*y*y, y*y*y;
+    return basis;
 }
 
 void CDPR::registerCallbacks() {

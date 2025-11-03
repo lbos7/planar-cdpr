@@ -19,11 +19,12 @@ constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
 constexpr uint8_t HOMING_CHECK_THRESH = 5;
 constexpr float KP = 1500.0;
 constexpr float KD = 50.0;
-constexpr float KI = 900.0 * 0.0;
+constexpr float KI = 900.0;
 constexpr float TAU = 0.015;
 constexpr float HOLD_THRESH = 0.06;
 constexpr float MAX_TENSION = 55.0;
 constexpr float MIN_TENSION = 8.0;
+extern Eigen::Matrix<float, 4, 10> FF_COEFFS;
 
 // ODrive Node IDs
 constexpr uint8_t ODRV0_NODE_ID = 0;
@@ -65,6 +66,7 @@ struct CDPRControlParams {
     float holdThesh = HOLD_THRESH;
     float maxTension = MAX_TENSION;
     float minTension = MIN_TENSION;
+    Eigen::Matrix<float, 4, 10> ffCoeffs = FF_COEFFS;
 };
 
 // Struct for cable data (lenghts, tensions, etc.) - same numbering scheme as ODrives

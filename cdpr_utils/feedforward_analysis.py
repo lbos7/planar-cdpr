@@ -53,6 +53,7 @@ for i in range(4):
     coeff_list.append(a)
 
 coeffs = np.asarray(coeff_list)
+print(coeffs)
 
 predicted = np.empty_like(tensions)
 for i in range(4):
@@ -74,9 +75,9 @@ plt.plot([min_val, max_val], [min_val, max_val], 'k-', label='predicted = measur
 plt.xlabel('Measured Tension')
 plt.ylabel('Predicted Tension')
 if degree == 2:
-    plt.title('Measured vs Predicted Tensions (2nd Order Polynomial)')
+    plt.title('Predicted vs Measured Tensions (2nd Order Polynomial)')
 elif degree ==3:
-    plt.title('Measured vs Predicted Tensions (3nd Order Polynomial)')
+    plt.title('Predicted vs Measured Tensions (3nd Order Polynomial)')
 plt.legend()
 plt.axis('equal')
 plt.grid(True)
@@ -95,19 +96,34 @@ positions = {
     3: (1, 0)   # bottom-left
 }
 
-# plt.figure(figsize=(12, 10))
-# for i in range(4):
-#     plt.subplot(2, 2, i+1)
-#     sc = plt.scatter(ee_pos[:, 0], ee_pos[:, 1], c=tension_errors[:, i], cmap='hot', s=50)
-#     plt.colorbar(sc, label=f'{cable_labels[i]} Absolute Error (N)')
-#     plt.xlabel('X Position (m)')
-#     plt.ylabel('Y Position (m)')
-#     plt.title(f'{cable_labels[i]} Error Map')
-#     plt.axis('equal')
-#     plt.grid(True)
+plt.figure(figsize=(12, 10))
 
-# plt.tight_layout()
-# plt.show()
+for i in range(4):
+    row, col = positions[i]
+    ax = plt.subplot2grid((2, 2), (row, col))
+    
+    # Scatter plot for absolute tension errors
+    sc = ax.scatter(
+        ee_pos[:, 0],
+        ee_pos[:, 1],
+        c=tension_errors[:, i],
+        cmap='hot',
+        s=50,
+        edgecolor='k',
+        linewidth=0.3
+    )
+    
+    # Colorbar and labels
+    plt.colorbar(sc, ax=ax, label=f'{cable_labels[i]} Absolute Error (N)')
+    
+    ax.set_xlabel('X Position (m)')
+    ax.set_ylabel('Y Position (m)')
+    ax.set_title(f'{cable_labels[i]} Error Heatmap (Scatter)')
+    ax.set_aspect('equal')
+    ax.grid(True)
+
+plt.tight_layout()
+plt.show()
 
 plt.figure(figsize=(12, 10))
 
@@ -123,7 +139,7 @@ for i in range(4):
     plt.colorbar(cont, ax=ax, label=f'{cable_labels[i]} Absolute Error (N)')
     ax.set_xlabel('X Position (m)')
     ax.set_ylabel('Y Position (m)')
-    ax.set_title(f'{cable_labels[i]} Error Heatmap')
+    ax.set_title(f'{cable_labels[i]} Error Heatmap (Triangulation)')
     ax.set_aspect('equal')
     ax.grid(True)
 
