@@ -240,6 +240,9 @@ void CDPR::deactivateMotors() {
     this->hold = false;
 }
 
+/**
+ * @brief Activates all motors in closed-loop position control mode.
+ */
 void CDPR::activateMotors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         this->confirmSetState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL, i);
@@ -314,20 +317,45 @@ void CDPR::update() {
     }
 }
 
+/**
+ * @brief Changes the state enum of the CDPR object.
+ * 
+ * @param state The desired state for the CDPR object.
+ */
 void CDPR::setState(CDPRState state) {
     this->robotState = state;
 }
 
+/**
+ * @brief Returns the current state of the CDPR object.
+ * 
+ * @return CDPRState The current state of the CDPR object.
+ */
 CDPRState CDPR::getState() {
     return this->robotState;
 }
 
+/**
+ * @brief Sets the controller gains of the CDPR object.
+ * 
+ * @param Kp The proportional gain.
+ * @param Kd The derivative gain.
+ * @param Ki The integral gain.
+ */
 void CDPR::setGains(float Kp, float Kd, float Ki) {
     this->Kp = Kp;
     this->Kd = Kd;
     this->Ki = Ki;
 }
 
+/**
+ * @brief Finds the end-effector's x,y position from motor positions/cable lengths through forward kinematics.
+ * 
+ * @param guess The initial end-effector position guess.
+ * @param tol The distance tolerance for estimating end-effector position.
+ * @param maxIter The max number of iterations before breaking the loop.
+ * @return Eigen::Vector2f The end-effector's x,y position.
+ */
 Eigen::Vector2f CDPR::solveFK(Eigen::Vector2f guess, float tol, uint8_t maxIter) {
     
     Eigen::Vector2f eePos = guess;
@@ -364,6 +392,12 @@ Eigen::Vector2f CDPR::solveFK(Eigen::Vector2f guess, float tol, uint8_t maxIter)
     return eePos;
 }
 
+/**
+ * @brief Finds cable lengths from end-effector x,y position through inverse kinematics.
+ * 
+ * @param eePos The end-effector x,y position.
+ * @return Eigen::Vector4f The 4 cable lengths.
+ */
 Eigen::Vector4f CDPR::solveIK(Eigen::Vector2f eePos) {
 
     Eigen::Vector4f lengths;
@@ -375,20 +409,46 @@ Eigen::Vector4f CDPR::solveIK(Eigen::Vector2f eePos) {
     return lengths;
 }
 
+/**
+ * @brief Converts from motor position to cable length.
+ * 
+ * @param motorPos The motor position to convert form (turns).
+ * @param motorID The id # corresponding to which motor the conversion is for.
+ * @return float The cable length corresponding to the motor position (m).
+ */
 float CDPR::motorPos2CableLength(float motorPos, uint8_t motorID) {
     float turnsDiff = this->robotData.motorOffsets(motorID) - motorPos;
     return turnsDiff * this->drumCircumference;
 }
 
+/**
+ * @brief Converts from cable length to motor position.
+ * 
+ * @param cableLength The cable length to convert from (m).
+ * @param motorID The id # corresponding to which motor the conversion is for.
+ * @return float The motor position corresponding to the cable length (turns).
+ */
 float CDPR::cableLength2MotorPos(float cableLength, uint8_t motorID) {
     float turnsDiff = cableLength / this->drumCircumference;
     return this->robotData.motorOffsets(motorID) - turnsDiff;
 }
 
+/**
+ * @brief Converts from motor torque to cable tension.
+ * 
+ * @param torque The motor torque to convert from (Nm).
+ * @return float The cable tension corresponding to the motor torque (N).
+ */
 float CDPR::torque2Tension(float torque) {
     return torque / this->drumRadius;
 }
 
+/**
+ * @brief Converts from cable tension to motor torque.
+ * 
+ * @param tension The cable tension to convert from (N).
+ * @return float The motor torque corresponding to the motor torque (Nm).
+ */
 float CDPR::tension2Torque(float tension) {
     return tension * this->drumRadius;
 }
@@ -460,6 +520,12 @@ void CDPR::applyController(float dt) {
     }
 }
 
+/**
+ * @brief Computes 4 cable tensions from 2D force.
+ * 
+ * @param force The force to decompose into tensions (N).
+ * @return Eigen::Vector4f The 4 cable tensions corresponding to the input force (N).
+ */
 Eigen::Vector4f CDPR::computeTensionsFromForce(Eigen::Vector2f &force) {
     Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
     Eigen::Vector4f tensionAdjustments = A * (A.transpose() * A).inverse() * force;
@@ -467,6 +533,11 @@ Eigen::Vector4f CDPR::computeTensionsFromForce(Eigen::Vector2f &force) {
     return tensions.cwiseMax(5.0f);
 }
 
+/**
+ * @brief Computes unit vectors from end-effector to anchor points for each cable.
+ * 
+ * @return Eigen::Matrix<float, 4, 2> The unit vectors for each cable (1 row per cable).
+ */
 Eigen::Matrix<float, 4, 2> CDPR::computeCableUnitVecs() {
     Eigen::Matrix<float, 4, 2> unitVecs;
 
@@ -479,6 +550,12 @@ Eigen::Matrix<float, 4, 2> CDPR::computeCableUnitVecs() {
     return unitVecs;
 }
 
+/**
+ * @brief Loads a waypoints arranged in a square for the end-effector to move between.
+ * 
+ * @param sideLen The spacing between waypoints (m).
+ * @param center The x,y centerpoint between all of the waypoints (m).
+ */
 void CDPR::loadSquareTraj(float sideLen, Eigen::Vector2f center) {
     this->waypoints.clear();
     this->waypoints.push_back(Eigen::Vector2f(center(0) + sideLen/2, center(1) + sideLen/2));
@@ -488,6 +565,12 @@ void CDPR::loadSquareTraj(float sideLen, Eigen::Vector2f center) {
     this->waypoints.push_back(Eigen::Vector2f(center(0) + sideLen/2, center(1) + sideLen/2));
 }
 
+/**
+ * @brief Loads a waypoints arranged in a diamond for the end-effector to move between.
+ * 
+ * @param sideLen The spacing between waypoints (m).
+ * @param center The x,y centerpoint between all of the waypoints (m).
+ */
 void CDPR::loadDiamondTraj(float sideLen, Eigen::Vector2f center) {
     this->waypoints.clear();
     float center2CornerDist = sideLen * sqrt(2.0f) / 2.0f;
@@ -517,6 +600,12 @@ void CDPR::activateWaypointsTraj(float speed) {
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
 }
 
+/**
+ * @brief Generates variables necessary for the end-effector to follow a trajectory.
+ * 
+ * @param goalPos The goal x,y position for the end-effector (m).
+ * @param speed The desired speed for the end-effector (m/s).
+ */
 void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
     this->startPos = this->eePos;
     this->segmentDir = (goalPos - this->startPos).normalized();
