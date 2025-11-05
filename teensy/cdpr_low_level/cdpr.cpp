@@ -122,6 +122,10 @@ void CDPR::checkTensionsAtPos() {
     this->robotData.tensions(1), this->robotData.tensions(2), this->robotData.tensions(3), (this->desiredPos - this->eePos).norm(), this->gridIndX, this->gridIndY);
 }
 
+void CDPR::logPos(float x, float y) {
+    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f\n", this->eePos(0), this->eePos(1), x, y);
+}
+
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");

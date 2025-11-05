@@ -215,6 +215,25 @@ void processCommand(String cmd) {
     } else {
         Serial.println("ERR Invalid MOVE command (expected: MOVE x y speed)");
     }
+  } else if (cmd.startsWith("LOG")) {
+    float x, y;
+
+    int firstSpace  = cmd.indexOf(' ');
+    int secondSpace = cmd.indexOf(' ', firstSpace + 1);
+
+    // Need 3 numbers (so thirdSpace == -1 only if there are no extra spaces)
+    if (firstSpace > 0 && secondSpace > firstSpace) {
+
+        x = cmd.substring(firstSpace + 1, secondSpace).toFloat();
+        y = cmd.substring(secondSpace + 1).toFloat();
+
+        // cdpr.startTraj(Eigen::Vector2f(x, y), speed);
+        // Serial.print("OK Changing Desired Pos to (");
+        // Serial.print(x); Serial.print(", "); Serial.println(y);
+        cdpr.logPos(x, y);
+    } else {
+        Serial.println("ERR Invalid MOVE command (expected: MOVE x y)");
+    }
   } else {
     Serial.println("ERR Unknown command");
   }

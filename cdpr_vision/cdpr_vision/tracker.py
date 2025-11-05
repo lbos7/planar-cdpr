@@ -34,6 +34,7 @@ class Tracker(Node):
         self.track_service = self.create_service(Empty, "track", self.track_callback)
         self.track_traj_service = self.create_service(ActivateTrajWaypoints, "track_traj", self.track_traj_callback)
         self.plot_service = self.create_service(Empty, "plot", self.plot_callback)
+        self.log_service = self.create_service(Empty, "log", self.log_callback)
 
         self.buffer = Buffer()
         self.tf_listener = TransformListener(self.buffer, self)
@@ -98,7 +99,7 @@ class Tracker(Node):
             
             try:
                 transform = self.buffer.lookup_transform("center", "ee_tag", rclpy.time.Time(),
-                                                         timeout=rclpy.time.Duration(seconds=0.001))
+                                                         timeout=rclpy.time.Duration(seconds=0.01))
                 x = transform.transform.translation.x
                 y = transform.transform.translation.y
                 self.apriltag_pos_array = np.vstack([self.apriltag_pos_array, np.array([x, y])])
@@ -192,6 +193,21 @@ class Tracker(Node):
         plt.show()
         return response
 
+    def log_callback(self, request, response):
+        received_xy_pos = False
+        while not received_xy_pos:
+            try:
+                transform = self.buffer.lookup_transform("center", "ee_tag", rclpy.time.Time(),
+                                                            timeout=rclpy.time.Duration(seconds=0.01))
+                x = transform.transform.translation.x
+                y = transform.transform.translation.y
+                received_xy_pos = True
+            except Exception:
+                self.get_logger().info("Looking up transform betwen \"center\" and \"ee_tag\" frames")
+        cmd = f"log {x:.4f} {y:.4f}\n"
+        serial_write(self.ser, cmd)
+        self.start_tracking()
+        return response
 
     def start_tracking(self):
         self.queue.clear()

@@ -24,6 +24,7 @@ class CDPR {
         void checkState();
         void checkGains();
         void checkTensionsAtPos();
+        void logPos(float x, float y);
         void homingSequence();
         void pretensionSetup();
         void addPretension();
