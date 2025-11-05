@@ -42,7 +42,9 @@ class CDPR {
         void changeTensionSetpoint(float tensionSetpoint);
         void setDesiredPos(Eigen::Vector2f pos);
         void applyController(float dt);
+        void applyFFController(float dt);
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
+        Eigen::Vector4f computeTensionsFF(Eigen::Vector2f &force);
         Eigen::Vector2f computeForceFromTensions(Eigen::Vector4f &tensions);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
         void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
@@ -55,6 +57,7 @@ class CDPR {
         void startGridTest();
         void updateGridTest();
         Eigen::Matrix<float, 10, 1> computeFFBasis();
+        void toggleFF();
 
     private:
         ODriveCAN** odrives;
@@ -103,6 +106,7 @@ class CDPR {
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
         float prevUpdateTime = 0.0;
         std::vector<Eigen::Vector2f> waypoints;
+        float waypointDistThresh = 0.01;
         uint8_t currentWaypointInd = 0;
         float waypointSpeed = 0.0;
         bool completedWaypoints = false;
@@ -122,6 +126,7 @@ class CDPR {
         };
         bool firstGridPoint = true;
         Eigen::Vector2f lastLoggedPos = Eigen::Vector2f::Zero();
+        bool useFF = false;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

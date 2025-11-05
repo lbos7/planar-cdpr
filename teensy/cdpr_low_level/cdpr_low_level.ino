@@ -70,6 +70,8 @@ void processCommand(String cmd) {
     cdpr.checkGains();
   } else if (cmd == "CHECKF") {
     cdpr.checkTensionsAtPos();
+  } else if (cmd == "TOGGLE") {
+    cdpr.toggleFF();
   } else if (cmd == "GRIDTEST") {
     cdpr.startGridTest();
   } else if (cmd.startsWith("SETS ")) {

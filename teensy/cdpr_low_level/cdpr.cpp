@@ -110,6 +110,11 @@ void CDPR::checkState() {
 void CDPR::checkGains() {
 
     Serial.printf("Kp: %0.3f\tKd: %0.3f\tKi: %0.3f\n", this->Kp, this->Kd, this->Ki);
+    if (this->useFF) {
+        Serial.println("Using FF");
+    } else {
+        Serial.println("Not Using FF");
+    }
 }
 
 void CDPR::checkTensionsAtPos() {
@@ -297,8 +302,12 @@ void CDPR::update() {
             // Serial.println("Updating Traj");
             this->updateTraj(dt);
         }
-
-        this->applyController(dt);
+        
+        if (this->useFF) {
+            this->applyFFController(dt);
+        } else {
+            this->applyController(dt);
+        }
 
         if (this->robotState == CDPRState::Waypoint) {
             Serial.printf("%.5f,%.5f\n", this->eePos(0), this->eePos(1));
@@ -471,10 +480,70 @@ void CDPR::applyController(float dt) {
     }
 }
 
+void CDPR::applyFFController(float dt) {
+    // Serial.println("=== Controller Active ===");
+
+    // Compute error
+    Eigen::Vector2f error = this->desiredPos - this->eePos;
+
+    // Compute derivative
+    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
+
+    // Compute integral
+    // this->intError += error * dt;
+
+    // // --- Scale integral error if it would violate tension limits ---
+    // Eigen::Vector2f intForce = this->Ki * this->intError;
+    // Eigen::Vector4f intTensions = this->computeTensionsFromForce(intForce);
+    // float scale = 1.0f;
+
+    // for (int i = 0; i < NUM_ODRIVES; i++) {
+    //     if (fabs(intTensions(i) > 1.0e-6f)) {
+    //         if (intTensions(i) > this->maxTension) {
+    //             scale = fmin(scale, this->maxTension / intTensions(i));
+    //         } else if (intTensions(i) < this->minTension) {
+    //             scale = fmin(scale, this->minTension / intTensions(i));
+    //         }
+    //     }
+    // }
+
+    // // Apply scaling if needed
+    // this->intError *= scale;
+    // // Serial.printf("Int Error:    x = %.5f, y = %.5f\n", this->intError(0), this->intError(1));
+
+    // Compute net force
+    Eigen::Vector2f netForce;
+    // if (this->hold) {
+    //     netForce = this->Kp * error + this->Kd * velError + this->Ki * this->intError;
+    // } else {
+    //     netForce = this->Kp * error + this->Kd * velError;
+    // }
+    netForce = this->Kp * error + this->Kd * velError;
+    // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
+
+    // Compute cable tensions
+    Eigen::Vector4f tensions = this->computeTensionsFF(netForce);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
+        float torque = this->tension2Torque(tensions(i));
+        this->odrives[i]->setTorque(torque);
+        // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
+    }
+}
+
 Eigen::Vector4f CDPR::computeTensionsFromForce(Eigen::Vector2f &force) {
     Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
     Eigen::Vector4f tensionAdjustments = A * (A.transpose() * A).inverse() * force;
     Eigen::Vector4f tensions = tensionAdjustments.array() + this->tensionSetpoint;
+    return tensions.cwiseMax(this->minTension);
+}
+
+Eigen::Vector4f CDPR::computeTensionsFF(Eigen::Vector2f &force) {
+    Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
+    Eigen::Vector4f tensionsPID = A * (A.transpose() * A).inverse() * force;
+    Eigen::Matrix<float, 10, 1> basis = this->computeFFBasis();
+    Eigen::Vector4f tensionsFF = this->ffCoeffs * basis;
+    Eigen::Vector4f tensions = tensionsPID + tensionsFF;
     return tensions.cwiseMax(this->minTension);
 }
 
@@ -523,6 +592,10 @@ void CDPR::activateWaypoints() {
     this->useWaypointsTraj = false;
     this->hold = true;
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
+    }
+    Serial.printf("%0.4f,%0.4f\n", this->waypointSpeed, this->waypointDistThresh);
 }
 
 void CDPR::activateWaypointsTraj(float speed) {
@@ -533,6 +606,10 @@ void CDPR::activateWaypointsTraj(float speed) {
     this->waypointSpeed = speed;
     this->generateTrajVars(this->waypoints[this->currentWaypointInd], this->waypointSpeed);
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
+    }
+    Serial.printf("%0.4f,%0.4f\n", this->waypointSpeed, this->waypointDistThresh);
 }
 
 void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
@@ -546,9 +623,8 @@ void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
 
 void CDPR::manageWaypoints() {
     if (!this->completedWaypoints) {
-        float distThresh = 0.015;
         float distError = (this->waypoints[currentWaypointInd] - this->eePos).norm();
-        if (distError < distThresh) {
+        if (distError < this->waypointDistThresh) {
             if (this->currentWaypointInd == this->waypoints.size() - 1) {
                 this->completedWaypoints = true;
                 this->robotState = CDPRState::Active;
@@ -696,6 +772,10 @@ Eigen::Matrix<float, 10, 1> CDPR::computeFFBasis() {
     float y = this->desiredPos(1);
     basis << 1, x, y, x*x, x*y, y*y, x*x*x, x*x*y, x*y*y, y*y*y;
     return basis;
+}
+
+void CDPR::toggleFF() {
+    this->useFF = !this->useFF;
 }
 
 void CDPR::registerCallbacks() {
