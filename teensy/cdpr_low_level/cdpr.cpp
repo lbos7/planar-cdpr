@@ -6,7 +6,14 @@
 #include <Arduino.h>
 #include <math.h>
 
-
+/**
+ * @brief Construct a new CDPR object.
+ * 
+ * @param odrives The ODrives that will be used to operate the system.
+ * @param dataStructs The feedback structs for each ODrive.
+ * @param dimPtr The pointer to a struct of relevant system dimensions.
+ * @param controlPtr The pointer to a struct fo relevant system control paramters.
+ */
 CDPR::CDPR(ODriveCAN** odrives,
            ODriveUserData** dataStructs,
            CDPRDimensions* dimPtr,
@@ -36,6 +43,12 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->waypoints.reserve(50);
 }
 
+/**
+ * @brief Checks to make sure CAN bus is working and ODrives are connected.
+ * 
+ * @return true 
+ * @return false 
+ */
 bool CDPR::setup() {
 
     this->registerCallbacks();
@@ -58,6 +71,9 @@ bool CDPR::setup() {
     return vbusCheck;
 }
 
+/**
+ * @brief Prints the target and estimated torque for each Motor.
+ */
 void CDPR::checkTorques() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         while (!this->dataStructs[i]->received_torque);
@@ -68,6 +84,9 @@ void CDPR::checkTorques() {
     }
 }
 
+/**
+ * @brief Prints the position for each Motor.
+ */
 void CDPR::checkMotorPos() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         while (!this->dataStructs[i]->received_feedback);
@@ -78,6 +97,9 @@ void CDPR::checkMotorPos() {
     }
 }
 
+/**
+ * @brief Prints the length of each cable.
+ */
 void CDPR::checkLengths() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         float len = this->robotData.lengths(i);
@@ -85,10 +107,16 @@ void CDPR::checkLengths() {
     }
 }
 
+/**
+ * @brief Prints the current end-effector position.
+ */
 void CDPR::checkEEPos() {
     Serial.printf("Current EE Pos: [%.5f, %.5f]\n", this->eePos(0), this->eePos(1));
 }
 
+/**
+ * @brief Prints the current state of the CDPR object.
+ */
 void CDPR::checkState() {
     // Print robot state
     const char* stateStr = "Unknown";
@@ -105,11 +133,17 @@ void CDPR::checkState() {
     Serial.println(stateStr);
 }
 
+/**
+ * @brief Prints the current controller gains.
+ */
 void CDPR::checkGains() {
 
     Serial.printf("Kp: %0.3f\tKd: %0.3f\tKi: %0.3f\n", this->Kp, this->Kd, this->Ki);
 }
 
+/**
+ * @brief Turns each motor until the end-effector reaches the corresponding pulley and logs motor position.
+ */
 void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
@@ -177,6 +211,9 @@ void CDPR::homingSequence() {
     Serial.println("Robot Homed");
 }
 
+/**
+ * @brief Sets up the system for pretensioning by adjusting cable lengths.
+ */
 void CDPR::pretensionSetup() {
     Serial.println("Preparing for pretension");
     Eigen::Vector4f goalLengths = this->solveIK(Eigen::Vector2f(0.0f, 0.0f));
@@ -196,6 +233,9 @@ void CDPR::pretensionSetup() {
     Serial.println("Pretension setup completed");
 }
 
+/**
+ * @brief Adds a pretension force to each of the cables.
+ */
 void CDPR::addPretension() {
 
     Get_Torques_msg_t torque;
@@ -232,6 +272,9 @@ void CDPR::addPretension() {
     Serial.println("Added pretension");
 }
 
+/**
+ * @brief Sets all ODrives to idle.
+ */
 void CDPR::deactivateMotors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         this->confirmSetState(ODriveAxisState::AXIS_STATE_IDLE, i);
@@ -241,7 +284,7 @@ void CDPR::deactivateMotors() {
 }
 
 /**
- * @brief Activates all motors in closed-loop position control mode.
+ * @brief Sets all ODrives to closed-loop position control mode.
  */
 void CDPR::activateMotors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
@@ -251,6 +294,9 @@ void CDPR::activateMotors() {
     }
 }
 
+/**
+ * @brief Updates important variables/attributes based on the CDPR object's state.
+ */
 void CDPR::update() {
     float t = micros() / 1e6f;
     float dt = t - this->prevUpdateTime;
@@ -453,10 +499,20 @@ float CDPR::tension2Torque(float tension) {
     return tension * this->drumRadius;
 }
 
+/**
+ * @brief Changes the tension setpoint used to offset the tensions generated from the PID controller.
+ * 
+ * @param tensionSetpoint The tension force to use for offsetting.
+ */
 void CDPR::changeTensionSetpoint(float tensionSetpoint) {
     this->tensionSetpoint = tensionSetpoint;
 }
 
+/**
+ * @brief Changes the desired end-effector position.
+ * 
+ * @param pos The new desired end-effector positiion.
+ */
 void CDPR::setDesiredPos(Eigen::Vector2f pos) {
     if (this->hold && (pos - this->eePos).norm() > 0.1) {
         this->intError = Eigen::Vector2f::Zero();
@@ -464,6 +520,11 @@ void CDPR::setDesiredPos(Eigen::Vector2f pos) {
     this->desiredPos = pos;
 }
 
+/**
+ * @brief Applies a PID controller based on position and velocity error.
+ * 
+ * @param dt The difference in time since the last control loop execution.
+ */
 void CDPR::applyController(float dt) {
     // Serial.println("=== Controller Active ===");
 
@@ -581,6 +642,9 @@ void CDPR::loadDiamondTraj(float sideLen, Eigen::Vector2f center) {
     this->waypoints.push_back(Eigen::Vector2f(center(0), center(1) + center2CornerDist));
 }
 
+/**
+ * @brief Activates waypoint-following mode using the setpoint controller.
+ */
 void CDPR::activateWaypoints() {
     this->robotState = CDPRState::Waypoint;
     this->currentWaypointInd = 0;
@@ -590,6 +654,11 @@ void CDPR::activateWaypoints() {
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
 }
 
+/**
+ * @brief Activates waypoint-following mode using the trajectory-following controller.
+ * 
+ * @param speed The desired end-effector speed (m/s).
+ */
 void CDPR::activateWaypointsTraj(float speed) {
     this->robotState = CDPRState::Waypoint;
     this->currentWaypointInd = 0;
@@ -615,6 +684,9 @@ void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
     this->hold = false;
 }
 
+/**
+ * @brief Handles waypoint-following mode operation and adjusts the current waypoint.
+ */
 void CDPR::manageWaypoints() {
     if (!this->completedWaypoints) {
         float distThresh = 0.015;
@@ -636,6 +708,11 @@ void CDPR::manageWaypoints() {
     }
 }
 
+/**
+ * @brief Updates desired end-effector position and velocity based on timestep, desired speed, and segment length.
+ * 
+ * @param dt The difference in time since the last control loop execution.
+ */
 void CDPR::updateTraj(float dt) {
 
     // increment time-based progress (s still measures total distance traveled)
@@ -669,6 +746,9 @@ void CDPR::updateTraj(float dt) {
     }
 }
 
+/**
+ * @brief Registers callback functions to log data from the ODrives.
+ */
 void CDPR::registerCallbacks() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         this->odrives[i]->onFeedback(onFeedback, this->dataStructs[i]);
@@ -677,6 +757,12 @@ void CDPR::registerCallbacks() {
     }
 }
 
+/**
+ * @brief Changes the ODrive state and confirms that the state has been set correctly. 
+ * 
+ * @param desiredState The desired ODriveAxisState enum.
+ * @param index The ODrive index number.
+ */
 void CDPR::confirmSetState(ODriveAxisState desiredState, uint8_t index) {
     while (this->dataStructs[index]->last_heartbeat.Axis_State != desiredState) {
         this->odrives[index]->setState(desiredState);
@@ -684,6 +770,9 @@ void CDPR::confirmSetState(ODriveAxisState desiredState, uint8_t index) {
     }
 }
 
+/**
+ * @brief Checks to make sure that all ODrives are connected.
+ */
 void CDPR::checkODriveConnections() {
     Serial.println("Checking connection to ODrives...");
     for (int i = 0; i < NUM_ODRIVES; i++) {
@@ -697,6 +786,12 @@ void CDPR::checkODriveConnections() {
     Serial.println("Found all ODrives");
 }
 
+/**
+ * @brief Checks to make sure the ODrives' bus voltage and current can be read.
+ * 
+ * @return true The bus voltage and current can be read for all ODrives.
+ * @return false The bus voltage and current could not be read for all ODrives.
+ */
 bool CDPR::checkODriveVBus() {
     Serial.println("Checking bus voltage and current for ODrives...");
     for (int i = 0; i < NUM_ODRIVES; i++) {
@@ -713,6 +808,9 @@ bool CDPR::checkODriveVBus() {
     return true;
 }
 
+/**
+ * @brief Clears any errors for all ODrives.
+ */
 void CDPR::clearODriveErrors() {
     for (int i = 0; i < NUM_ODRIVES; i++) {
         this->odrives[i]->clearErrors();
