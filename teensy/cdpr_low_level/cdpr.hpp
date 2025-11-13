@@ -68,6 +68,7 @@ class CDPR {
         float drumCircumference;
         float workspaceLen;
         float workspaceBorderOffset;
+        float passiveEEOffset;
         Eigen::Matrix<float, 4, 2> anchorPoints;
         Eigen::Matrix<float, 4, 2> eeOffsets;
         float tensionSetpoint;

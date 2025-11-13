@@ -19,6 +19,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->drumCircumference = dimPtr->drumCircumference;
     this->workspaceLen = dimPtr->workspaceLen;
     this->workspaceBorderOffset = dimPtr->workspaceBorderOffset;
+    this->passiveEEOffset = dimPtr->passiveEEOffset;
     this->anchorPoints = dimPtr->anchorPoints;
     this->eeOffsets = dimPtr->eeOffsets;
     this->tensionSetpoint = controlPtr->tensionSetpoint;

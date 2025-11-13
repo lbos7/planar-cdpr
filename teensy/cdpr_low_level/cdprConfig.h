@@ -13,6 +13,7 @@ constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
 constexpr float WORKSPACE_BORDER_OFFSET = 0.0254;   // meters
+constexpr float PASSIVE_EE_OFFSET = 0.04672;
 constexpr float TENSION_SETPOINT = 30.0; // Newtons
 constexpr float HOMING_VELOCITY = 2.0;  // turns/s
 constexpr float HOMING_VELOCITY_THRESH = 0.05;   // turns/s
@@ -39,6 +40,7 @@ struct CDPRDimensions {
     float drumCircumference = DRUM_CIRCUMFERENCE;
     float workspaceLen = WORKSPACE_LEN;
     float workspaceBorderOffset = WORKSPACE_BORDER_OFFSET;
+    float passiveEEOffset = PASSIVE_EE_OFFSET;
     Eigen::Matrix<float, 4, 2> anchorPoints = 
         (Eigen::Matrix<float, 4, 2>() << 
             WORKSPACE_LEN/2, WORKSPACE_LEN/2,

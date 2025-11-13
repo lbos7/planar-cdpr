@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 
-with open('waypoint_data/ff_traj_square25.csv', 'r') as file:
+with open('waypoint_data/ff_traj_square25_passive.csv', 'r') as file:
+# with open('waypoint_data/ff_traj_square25.csv', 'r') as file:
 # with open('waypoint_data/traj_square2.csv', 'r') as file:
     csv_reader = csv.reader(file)
     data_list = list(csv_reader)
@@ -15,6 +16,7 @@ thresh = data_array[4, 1]
 ee_pos_array = data_array[5:]
 
 using_ff = "ff" in file.name
+passive = "passive" in file.name
 
 plt.figure(figsize=(8, 8))
 plt.plot(waypoints[:, 0], waypoints[:, 1], '-ok')
@@ -28,7 +30,9 @@ for wp in waypoints:
 plt.legend(["Ideal Path", "Estimated EE Pos", "Waypoint Threshold"])
 plt.xlabel("x (m)")
 plt.ylabel("y (m)")
-if using_ff:
+if using_ff and passive:
+    plt.title(f"Passive EE Movement Performance (FK Estimate) - Trajectory Control w/ Feedforward @ {speed} m/s")
+elif using_ff and not passive:
     plt.title(f"EE Movement Performance (FK Estimate) - Trajectory Control w/ Feedforward @ {speed} m/s")
 else:
     plt.title(f"EE Movement Performance (FK Estimate) - Trajectory Control @ {speed} m/s")
