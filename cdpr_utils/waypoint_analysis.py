@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 
-with open('waypoint_data/ff_traj_square25_passive.csv', 'r') as file:
+with open('waypoint_data/ff_traj_square2_passive.csv', 'r') as file:
 # with open('waypoint_data/ff_traj_square25.csv', 'r') as file:
 # with open('waypoint_data/traj_square2.csv', 'r') as file:
     csv_reader = csv.reader(file)
