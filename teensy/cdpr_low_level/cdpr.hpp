@@ -107,7 +107,7 @@ class CDPR {
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
         float prevUpdateTime = 0.0;
         std::vector<Eigen::Vector2f> waypoints;
-        float waypointDistThresh = 0.01;
+        float waypointDistThresh = 0.015;
         uint8_t currentWaypointInd = 0;
         float waypointSpeed = 0.0;
         bool completedWaypoints = false;
