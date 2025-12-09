@@ -23,6 +23,8 @@ class CDPR {
         void checkEEPos();
         void checkState();
         void checkGains();
+        void checkTensionsAtPos();
+        void logPos(float x, float y);
         void homingSequence();
         void pretensionSetup();
         void addPretension();
@@ -39,11 +41,12 @@ class CDPR {
         float torque2Tension(float torque);
         float tension2Torque(float tension);
         void changeTensionSetpoint(float tensionSetpoint);
-        // void startTraj(Eigen::Vector2f goal, float speed);
-        // void updateTraj();
         void setDesiredPos(Eigen::Vector2f pos);
         void applyController(float dt);
+        void applyFFController(float dt);
         Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
+        Eigen::Vector4f computeTensionsFF(Eigen::Vector2f &force);
+        Eigen::Vector2f computeForceFromTensions(Eigen::Vector4f &tensions);
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
         void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
         void loadDiamondTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
@@ -52,6 +55,10 @@ class CDPR {
         void generateTrajVars(Eigen::Vector2f goalPos, float speed);
         void manageWaypoints();
         void updateTraj(float dt);
+        void startGridTest();
+        void updateGridTest();
+        Eigen::Matrix<float, 10, 1> computeFFBasis();
+        void toggleFF();
 
     private:
         ODriveCAN** odrives;
@@ -74,6 +81,7 @@ class CDPR {
         float holdThresh;
         float maxTension;
         float minTension;
+        Eigen::Matrix<float, 4, 10> ffCoeffs;
         Eigen::Vector2f intError = Eigen::Vector2f::Zero();
         CDPRData robotData;
         CDPRState robotState = CDPRState::Startup;
@@ -99,10 +107,27 @@ class CDPR {
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();
         float prevUpdateTime = 0.0;
         std::vector<Eigen::Vector2f> waypoints;
+        float waypointDistThresh = 0.015;
         uint8_t currentWaypointInd = 0;
         float waypointSpeed = 0.0;
         bool completedWaypoints = false;
         bool useWaypointsTraj = false;
+        float gridTestSpeed = 0.25;
+        int gridIndX = 0;
+        int gridIndY = 0;
+        // float gridCheckpoints[12] = {
+        //     -0.393475, -0.321934, -0.250393, -0.178852,
+        //     -0.107311, -0.035770, 0.035770, 0.107311,
+        //     0.178852, 0.250393, 0.321934, 0.393475
+        // };
+        float gridCheckpoints[11] = {
+            -0.393475, -0.314543, -0.235611, -0.156679,
+            -0.077747,  0.001185,  0.080117,  0.159049,
+            0.237981,  0.316913,  0.395845
+        };
+        bool firstGridPoint = true;
+        Eigen::Vector2f lastLoggedPos = Eigen::Vector2f::Zero();
+        bool useFF = false;
 
         void registerCallbacks();
         void confirmSetState(ODriveAxisState desiredState, uint8_t index);

@@ -8,7 +8,7 @@
 // Constants
 constexpr uint32_t CAN_BAUDRATE = 1000000;
 constexpr uint8_t NUM_ODRIVES = 4;
-constexpr float EE_SIDE_LEN = 0.0;   // 0.0646 original ee;   // meters
+constexpr float EE_SIDE_LEN = 0.0426;   // 0.0646 original ee;   // meters
 constexpr float DRUM_RADIUS = 0.025;   // meters - from CAD model
 constexpr float DRUM_CIRCUMFERENCE = 2*DRUM_RADIUS * M_PI;  // meters
 constexpr float WORKSPACE_LEN = 0.86995;  // meters - from CAD model
@@ -24,6 +24,7 @@ constexpr float TAU = 0.015;
 constexpr float HOLD_THRESH = 0.06;
 constexpr float MAX_TENSION = 55.0;
 constexpr float MIN_TENSION = 8.0;
+extern Eigen::Matrix<float, 4, 10> FF_COEFFS;
 
 // ODrive Node IDs
 constexpr uint8_t ODRV0_NODE_ID = 0;
@@ -65,6 +66,7 @@ struct CDPRControlParams {
     float holdThesh = HOLD_THRESH;
     float maxTension = MAX_TENSION;
     float minTension = MIN_TENSION;
+    Eigen::Matrix<float, 4, 10> ffCoeffs = FF_COEFFS;
 };
 
 // Struct for cable data (lenghts, tensions, etc.) - same numbering scheme as ODrives
@@ -79,6 +81,7 @@ enum class CDPRState {
     Homed,
     Active,
     Waypoint,
+    GridTest,
     Debug
 };
 

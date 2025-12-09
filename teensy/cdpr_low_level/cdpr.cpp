@@ -39,6 +39,7 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->holdThresh = controlPtr->holdThesh;
     this->maxTension = controlPtr->maxTension;
     this->minTension = controlPtr->minTension;
+    this->ffCoeffs = controlPtr->ffCoeffs;
     this->robotData = CDPRData();
     this->waypoints.reserve(50);
 }
@@ -127,6 +128,7 @@ void CDPR::checkState() {
         case CDPRState::Debug:   stateStr = "Debug";   break;
         case CDPRState::Homed:   stateStr = "Homed";   break;
         case CDPRState::Waypoint:   stateStr = "Waypoint";   break;
+        case CDPRState::GridTest:   stateStr = "GridTest";   break;
     }
 
     Serial.print("Current State: ");
@@ -139,6 +141,20 @@ void CDPR::checkState() {
 void CDPR::checkGains() {
 
     Serial.printf("Kp: %0.3f\tKd: %0.3f\tKi: %0.3f\n", this->Kp, this->Kd, this->Ki);
+    if (this->useFF) {
+        Serial.println("Using FF");
+    } else {
+        Serial.println("Not Using FF");
+    }
+}
+
+void CDPR::checkTensionsAtPos() {
+    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%d,%d\n", this->eePos(0), this->eePos(1), this->robotData.tensions(0),
+    this->robotData.tensions(1), this->robotData.tensions(2), this->robotData.tensions(3), (this->desiredPos - this->eePos).norm(), this->gridIndX, this->gridIndY);
+}
+
+void CDPR::logPos(float x, float y) {
+    Serial.printf("%0.4f,%0.4f,%0.4f,%0.4f\n", this->eePos(0), this->eePos(1), x, y);
 }
 
 /**
@@ -334,15 +350,23 @@ void CDPR::update() {
         this->eeVel = alpha * eeVelRaw + (1.0f - alpha) * this->eeVel;
         this->prevPos = this->eePos;
     }
-    if (this->robotState == CDPRState::Active || this->robotState == CDPRState::Waypoint) {
+    if (this->robotState == CDPRState::Active || this->robotState == CDPRState::Waypoint || this->robotState == CDPRState::GridTest) {
         if (!this->hold) {
             // Serial.println("Updating Traj");
             this->updateTraj(dt);
         }
-        this->applyController(dt);
+        
+        if (this->useFF) {
+            this->applyFFController(dt);
+        } else {
+            this->applyController(dt);
+        }
+
         if (this->robotState == CDPRState::Waypoint) {
             Serial.printf("%.5f,%.5f\n", this->eePos(0), this->eePos(1));
             this->manageWaypoints();
+        } else if (this->robotState == CDPRState::GridTest) {
+            this->updateGridTest();
         }
     }
 
@@ -581,6 +605,108 @@ void CDPR::applyController(float dt) {
     }
 }
 
+void CDPR::applyFFController(float dt) {
+    // Serial.println("=== Controller Active ===");
+
+    // Compute error
+    Eigen::Vector2f error = this->desiredPos - this->eePos;
+
+    // Compute derivative
+    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
+
+    // Compute integral
+    // this->intError += error * dt;
+
+    // // --- Scale integral error if it would violate tension limits ---
+    // Eigen::Vector2f intForce = this->Ki * this->intError;
+    // Eigen::Vector4f intTensions = this->computeTensionsFromForce(intForce);
+    // float scale = 1.0f;
+
+    // for (int i = 0; i < NUM_ODRIVES; i++) {
+    //     if (fabs(intTensions(i) > 1.0e-6f)) {
+    //         if (intTensions(i) > this->maxTension) {
+    //             scale = fmin(scale, this->maxTension / intTensions(i));
+    //         } else if (intTensions(i) < this->minTension) {
+    //             scale = fmin(scale, this->minTension / intTensions(i));
+    //         }
+    //     }
+    // }
+
+    // // Apply scaling if needed
+    // this->intError *= scale;
+    // // Serial.printf("Int Error:    x = %.5f, y = %.5f\n", this->intError(0), this->intError(1));
+
+    // Compute net force
+    Eigen::Vector2f netForce;
+    // if (this->hold) {
+    //     netForce = this->Kp * error + this->Kd * velError + this->Ki * this->intError;
+    // } else {
+    //     netForce = this->Kp * error + this->Kd * velError;
+    // }
+    netForce = this->Kp * error + this->Kd * velError;
+    // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
+
+    // Compute cable tensions
+    Eigen::Vector4f tensions = this->computeTensionsFF(netForce);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
+        float torque = this->tension2Torque(tensions(i));
+        this->odrives[i]->setTorque(torque);
+        // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
+    }
+}
+
+void CDPR::applyFFController(float dt) {
+    // Serial.println("=== Controller Active ===");
+
+    // Compute error
+    Eigen::Vector2f error = this->desiredPos - this->eePos;
+
+    // Compute derivative
+    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
+
+    // Compute integral
+    // this->intError += error * dt;
+
+    // // --- Scale integral error if it would violate tension limits ---
+    // Eigen::Vector2f intForce = this->Ki * this->intError;
+    // Eigen::Vector4f intTensions = this->computeTensionsFromForce(intForce);
+    // float scale = 1.0f;
+
+    // for (int i = 0; i < NUM_ODRIVES; i++) {
+    //     if (fabs(intTensions(i) > 1.0e-6f)) {
+    //         if (intTensions(i) > this->maxTension) {
+    //             scale = fmin(scale, this->maxTension / intTensions(i));
+    //         } else if (intTensions(i) < this->minTension) {
+    //             scale = fmin(scale, this->minTension / intTensions(i));
+    //         }
+    //     }
+    // }
+
+    // // Apply scaling if needed
+    // this->intError *= scale;
+    // // Serial.printf("Int Error:    x = %.5f, y = %.5f\n", this->intError(0), this->intError(1));
+
+    // Compute net force
+    Eigen::Vector2f netForce;
+    // if (this->hold) {
+    //     netForce = this->Kp * error + this->Kd * velError + this->Ki * this->intError;
+    // } else {
+    //     netForce = this->Kp * error + this->Kd * velError;
+    // }
+    netForce = this->Kp * error + this->Kd * velError;
+    // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
+
+    // Compute cable tensions
+    Eigen::Vector4f tensions = this->computeTensionsFF(netForce);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
+        float torque = this->tension2Torque(tensions(i));
+        this->odrives[i]->setTorque(torque);
+        // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
+    }
+}
+
 /**
  * @brief Computes 4 cable tensions from 2D force.
  * 
@@ -591,7 +717,23 @@ Eigen::Vector4f CDPR::computeTensionsFromForce(Eigen::Vector2f &force) {
     Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
     Eigen::Vector4f tensionAdjustments = A * (A.transpose() * A).inverse() * force;
     Eigen::Vector4f tensions = tensionAdjustments.array() + this->tensionSetpoint;
-    return tensions.cwiseMax(5.0f);
+    return tensions.cwiseMax(this->minTension);
+}
+
+Eigen::Vector4f CDPR::computeTensionsFF(Eigen::Vector2f &force) {
+    Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
+    Eigen::Vector4f tensionsPID = A * (A.transpose() * A).inverse() * force;
+    Eigen::Matrix<float, 10, 1> basis = this->computeFFBasis();
+    Eigen::Vector4f tensionsFF = this->ffCoeffs * basis;
+    Eigen::Vector4f tensions = tensionsPID + tensionsFF;
+    return tensions.cwiseMax(this->minTension);
+}
+
+Eigen::Vector2f CDPR::computeForceFromTensions(Eigen::Vector4f &tensions) {
+    Eigen::Matrix<float, 4, 2> A = this->computeCableUnitVecs();
+    Eigen::Vector4f tensionAdjustments = tensions.array() - this->tensionSetpoint;
+    Eigen::Vector2f force = A.transpose() * tensionAdjustments;
+    return force;
 }
 
 /**
@@ -652,6 +794,10 @@ void CDPR::activateWaypoints() {
     this->useWaypointsTraj = false;
     this->hold = true;
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
+    }
+    Serial.printf("%0.4f,%0.4f\n", this->waypointSpeed, this->waypointDistThresh);
 }
 
 /**
@@ -667,6 +813,10 @@ void CDPR::activateWaypointsTraj(float speed) {
     this->waypointSpeed = speed;
     this->generateTrajVars(this->waypoints[this->currentWaypointInd], this->waypointSpeed);
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
+    for (int i = 0; i < NUM_ODRIVES; i++) {
+        Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
+    }
+    Serial.printf("%0.4f,%0.4f\n", this->waypointSpeed, this->waypointDistThresh);
 }
 
 /**
@@ -689,9 +839,8 @@ void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
  */
 void CDPR::manageWaypoints() {
     if (!this->completedWaypoints) {
-        float distThresh = 0.015;
         float distError = (this->waypoints[currentWaypointInd] - this->eePos).norm();
-        if (distError < distThresh) {
+        if (distError < this->waypointDistThresh) {
             if (this->currentWaypointInd == this->waypoints.size() - 1) {
                 this->completedWaypoints = true;
                 this->robotState = CDPRState::Active;
@@ -744,6 +893,214 @@ void CDPR::updateTraj(float dt) {
         this->hold = true; // Switch to hold mode
         this->intError = this->desiredPos - this->eePos;
     }
+}
+
+void CDPR::startGridTest() {
+    this->gridIndX = 0;
+    this->gridIndY = 0;
+    this->firstGridPoint = true;
+    this->lastLoggedPos = this->eePos;
+    this->robotState = CDPRState::GridTest;
+}
+
+// void CDPR::updateGridTest() {
+
+//     if (this->firstGridPoint) {
+//         float targetX = this->gridCheckpoints[this->gridIndX];
+//         float targetY = this->gridCheckpoints[this->gridIndY];
+//         Eigen::Vector2f targetPos(targetX, targetY);
+//         this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         this->firstGridPoint = false;
+//     }
+
+//     if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+//         delay(1000);
+//         this->checkTensionsAtPos();
+//         this->lastLoggedPos = this->eePos;
+
+//         if (this->gridIndY % 2 == 0) {
+//             this->gridIndX++;
+//             if (this->gridIndX >= 11) {
+//                 this->gridIndX = 10;
+//                 this->gridIndY++;
+//             }
+//         } else {
+//             this->gridIndX--;
+//             if (this->gridIndX < 0) {
+//                 this->gridIndX = 0;
+//                 this->gridIndY++;
+//             }
+//         }
+
+//         if (this->gridIndY >= 11) {
+//             this->gridIndY = 0;
+//             this->gridIndX = 0;
+//             this->robotState = CDPRState::Active;
+//         } else {
+//             float targetX = this->gridCheckpoints[this->gridIndX];
+//             float targetY = this->gridCheckpoints[this->gridIndY];
+//             Eigen::Vector2f targetPos(targetX, targetY);
+//             this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         }
+//     }
+// }
+
+void CDPR::updateGridTest() {
+
+    if (this->firstGridPoint) {
+        float targetX = this->gridCheckpoints[this->gridIndX];
+        float targetY = this->gridCheckpoints[this->gridIndY];
+        Eigen::Vector2f targetPos(targetX, targetY);
+        this->generateTrajVars(targetPos, this->gridTestSpeed);
+        this->firstGridPoint = false;
+    }
+
+    if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+        delay(1000);
+        this->checkTensionsAtPos();
+        this->lastLoggedPos = this->eePos;
+
+        if (this->gridIndX % 2 == 0) {
+            this->gridIndY++;
+            if (this->gridIndY >= 11) {
+                this->gridIndY = 10;
+                this->gridIndX++;
+            }
+        } else {
+            this->gridIndY--;
+            if (this->gridIndY < 0) {
+                this->gridIndY = 0;
+                this->gridIndX++;
+            }
+        }
+
+        if (this->gridIndX >= 11) {
+            this->gridIndX = 0;
+            this->gridIndY = 0;
+            this->robotState = CDPRState::Active;
+        } else {
+            float targetX = this->gridCheckpoints[this->gridIndX];
+            float targetY = this->gridCheckpoints[this->gridIndY];
+            Eigen::Vector2f targetPos(targetX, targetY);
+            this->generateTrajVars(targetPos, this->gridTestSpeed);
+        }
+    }
+}
+
+Eigen::Matrix<float, 10, 1> CDPR::computeFFBasis() {
+    Eigen::Matrix<float, 10, 1> basis;
+    float x = this->desiredPos(0);
+    float y = this->desiredPos(1);
+    basis << 1, x, y, x*x, x*y, y*y, x*x*x, x*x*y, x*y*y, y*y*y;
+    return basis;
+}
+
+void CDPR::toggleFF() {
+    this->useFF = !this->useFF;
+}
+
+void CDPR::startGridTest() {
+    this->gridIndX = 0;
+    this->gridIndY = 0;
+    this->firstGridPoint = true;
+    this->lastLoggedPos = this->eePos;
+    this->robotState = CDPRState::GridTest;
+}
+
+// void CDPR::updateGridTest() {
+
+//     if (this->firstGridPoint) {
+//         float targetX = this->gridCheckpoints[this->gridIndX];
+//         float targetY = this->gridCheckpoints[this->gridIndY];
+//         Eigen::Vector2f targetPos(targetX, targetY);
+//         this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         this->firstGridPoint = false;
+//     }
+
+//     if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+//         delay(1000);
+//         this->checkTensionsAtPos();
+//         this->lastLoggedPos = this->eePos;
+
+//         if (this->gridIndY % 2 == 0) {
+//             this->gridIndX++;
+//             if (this->gridIndX >= 11) {
+//                 this->gridIndX = 10;
+//                 this->gridIndY++;
+//             }
+//         } else {
+//             this->gridIndX--;
+//             if (this->gridIndX < 0) {
+//                 this->gridIndX = 0;
+//                 this->gridIndY++;
+//             }
+//         }
+
+//         if (this->gridIndY >= 11) {
+//             this->gridIndY = 0;
+//             this->gridIndX = 0;
+//             this->robotState = CDPRState::Active;
+//         } else {
+//             float targetX = this->gridCheckpoints[this->gridIndX];
+//             float targetY = this->gridCheckpoints[this->gridIndY];
+//             Eigen::Vector2f targetPos(targetX, targetY);
+//             this->generateTrajVars(targetPos, this->gridTestSpeed);
+//         }
+//     }
+// }
+
+void CDPR::updateGridTest() {
+
+    if (this->firstGridPoint) {
+        float targetX = this->gridCheckpoints[this->gridIndX];
+        float targetY = this->gridCheckpoints[this->gridIndY];
+        Eigen::Vector2f targetPos(targetX, targetY);
+        this->generateTrajVars(targetPos, this->gridTestSpeed);
+        this->firstGridPoint = false;
+    }
+
+    if (this->eeVel.norm() < 0.0008f && (this->eePos - this->lastLoggedPos).norm() > 0.01) {
+        delay(1000);
+        this->checkTensionsAtPos();
+        this->lastLoggedPos = this->eePos;
+
+        if (this->gridIndX % 2 == 0) {
+            this->gridIndY++;
+            if (this->gridIndY >= 11) {
+                this->gridIndY = 10;
+                this->gridIndX++;
+            }
+        } else {
+            this->gridIndY--;
+            if (this->gridIndY < 0) {
+                this->gridIndY = 0;
+                this->gridIndX++;
+            }
+        }
+
+        if (this->gridIndX >= 11) {
+            this->gridIndX = 0;
+            this->gridIndY = 0;
+            this->robotState = CDPRState::Active;
+        } else {
+            float targetX = this->gridCheckpoints[this->gridIndX];
+            float targetY = this->gridCheckpoints[this->gridIndY];
+            Eigen::Vector2f targetPos(targetX, targetY);
+            this->generateTrajVars(targetPos, this->gridTestSpeed);
+        }
+    }
+}
+
+Eigen::Matrix<float, 10, 1> CDPR::computeFFBasis() {
+    Eigen::Matrix<float, 10, 1> basis;
+    float x = this->desiredPos(0);
+    float y = this->desiredPos(1);
+    basis << 1, x, y, x*x, x*y, y*y, x*x*x, x*x*y, x*y*y, y*y*y;
+    return basis;
+}
+
+void CDPR::toggleFF() {
+    this->useFF = !this->useFF;
 }
 
 /**
