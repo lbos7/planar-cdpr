@@ -63,7 +63,7 @@ void loop() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == '\n') {
-            processCommand(cmdBuffer, cdpr);
+            processCommand(cmdBuffer);
             cmdBuffer = "";
         } else {
             cmdBuffer += c;

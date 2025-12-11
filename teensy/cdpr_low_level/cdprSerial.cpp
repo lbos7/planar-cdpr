@@ -1,6 +1,6 @@
 #include "cdprSerial.h"
 
-void processCommand(String cmd, CDPR cdpr) {
+void processCommand(String cmd) {
     cmd.trim();  // remove whitespace like \r
     cmd.toUpperCase();
   
@@ -140,7 +140,7 @@ void processCommand(String cmd, CDPR cdpr) {
         }
     } else if (cmd.startsWith("MOVE")) {
         float x, y;
-    
+     
         int firstSpace  = cmd.indexOf(' ');
         int secondSpace = cmd.indexOf(' ', firstSpace + 1);
     

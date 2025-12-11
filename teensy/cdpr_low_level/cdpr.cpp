@@ -18,7 +18,6 @@ CDPR::CDPR(ODriveCAN** odrives,
     this->drumRadius = dimPtr->drumRadius;
     this->drumCircumference = dimPtr->drumCircumference;
     this->workspaceLen = dimPtr->workspaceLen;
-    this->workspaceBorderOffset = dimPtr->workspaceBorderOffset;
     this->anchorPoints = dimPtr->anchorPoints;
     this->eeOffsets = dimPtr->eeOffsets;
     this->tensionSetpoint = controlPtr->tensionSetpoint;
@@ -39,16 +38,16 @@ CDPR::CDPR(ODriveCAN** odrives,
 
 bool CDPR::setup() {
 
+    // Register callbacks and setup CAN
     this->registerCallbacks();
-
     if (!setupCan()) {
         Serial.println("CAN failed to initialize: reset required");
         return false;
     }
 
+    // Confirm ODrives are powered
     this->checkODriveConnections();
     bool vbusCheck = this->checkODriveVBus();
-
     if (vbusCheck) {
         Serial.println("ODrives Connected & Powered");
         this->clearODriveErrors();
@@ -91,10 +90,8 @@ void CDPR::checkEEPos() {
 }
 
 void CDPR::checkState() {
-    // Print robot state
     const char* stateStr = "Unknown";
-
-    switch (this->robotState) {  // assuming `this->state` is of type CDPRState
+    switch (this->robotState) {
         case CDPRState::Startup: stateStr = "Startup"; break;
         case CDPRState::Active:  stateStr = "Active";  break;
         case CDPRState::Debug:   stateStr = "Debug";   break;
@@ -102,13 +99,11 @@ void CDPR::checkState() {
         case CDPRState::Waypoint:   stateStr = "Waypoint";   break;
         case CDPRState::GridTest:   stateStr = "GridTest";   break;
     }
-
     Serial.print("Current State: ");
     Serial.println(stateStr);
 }
 
 void CDPR::checkGains() {
-
     Serial.printf("Kp: %0.3f\tKd: %0.3f\tKi: %0.3f\n", this->Kp, this->Kd, this->Ki);
     if (this->useFF) {
         Serial.println("Using FF");
@@ -130,40 +125,46 @@ void CDPR::homingSequence() {
 
     Serial.println("Homing Robot");
 
+    // Set motors to IDLE
     this->deactivateMotors();
+
     for (int i = 0; i < NUM_ODRIVES; i++) {
+
+        // Set motor to closed-loop velocity control mode
         this->confirmSetState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL, i);
         this->odrives[i]->setControllerMode(ODriveControlMode::CONTROL_MODE_VELOCITY_CONTROL,
                                             ODriveInputMode::INPUT_MODE_VEL_RAMP);
 
+        // Wait until feedback has been received
         while (!this->dataStructs[i]->received_feedback) {
             this->update();
         }
         
+        // Prepare for position checks
         Get_Encoder_Estimates_msg_t feedback = this->dataStructs[i]->last_feedback;
         this->dataStructs[i]->received_feedback = false;
         float motorSpeed = feedback.Vel_Estimate;
         float initialPos = feedback.Pos_Estimate;
-
         uint8_t numChecks = 0;
-
         this->odrives[i]->setVelocity(this->homingVelocity, 0.0);
 
         // Wait until motor reaches ~90% of homing velocity and has moved at least a 1/4 turn
         while (true) {
             this->update();
 
+            // Case if feedback is received
             if (this->dataStructs[i]->received_feedback) {
                 feedback = this->dataStructs[i]->last_feedback;
                 this->dataStructs[i]->received_feedback = false;
 
+                // Check if motor is moving fast enough and has turned at least a 1/4 turn
                 if (fabs(feedback.Vel_Estimate) >= this->homingVelocity * 0.9 && fabs(feedback.Pos_Estimate - initialPos) >= 0.25) {
                     break; // motor is moving enough to start homing check
                 }
             }
         }
         
-
+        // Stop turning if motor speed is below threshold for more than the required number of checks
         while (numChecks < this->homingCheckThresh) {
             this->update();
 
@@ -180,15 +181,20 @@ void CDPR::homingSequence() {
             }
         }
 
+        // Wait for feedback
         while (!this->dataStructs[i]->received_feedback) {
             this->update();
         }
+
+        // Store motor offset and set all motors to IDLE
         feedback = this->dataStructs[i]->last_feedback;
         this->dataStructs[i]->received_feedback = false;
         this->odrives[i]->setVelocity(0.0, 0.0);
         this->robotData.motorOffsets(i) = feedback.Pos_Estimate;
         this->deactivateMotors();
     }
+
+    // Update homing state variable
     this->completedHoming = true;
     Serial.println("Robot Homed");
 }
@@ -253,7 +259,6 @@ void CDPR::deactivateMotors() {
         this->confirmSetState(ODriveAxisState::AXIS_STATE_IDLE, i);
     }
     this->completedPretension = false;
-    this->hold = false;
 }
 
 void CDPR::activateMotors() {
@@ -265,16 +270,24 @@ void CDPR::activateMotors() {
 }
 
 void CDPR::update() {
+
+    // Update timestep and variables
     float t = micros() / 1e6f;
     float dt = t - this->prevUpdateTime;
     this->prevUpdateTime = t;
     static uint32_t lastErrorCheck = 0;
     uint32_t now = millis();
+
+    // Define feedback variables
     Get_Encoder_Estimates_msg_t feedback;
     Get_Torques_msg_t torque;
+
+    // Get messages from CAN bus
     pumpEventsWrapper(can_intf);
 
     if (this->robotState == CDPRState::Homed) {
+
+        // Update cable lengths
         for (int i = 0; i < NUM_ODRIVES; i++) {
             if (this->dataStructs[i]->received_feedback) {
                 feedback = this->dataStructs[i]->last_feedback;
@@ -282,7 +295,10 @@ void CDPR::update() {
                 this->robotData.lengths(i) = this->motorPos2CableLength(feedback.Pos_Estimate, i);
             }
         }
+
     } else if (this->robotState != CDPRState::Startup) {
+
+        // Update cable lenghts and tensions
         for (int i = 0; i < NUM_ODRIVES; i++) {
             if (this->dataStructs[i]->received_feedback) {
                 feedback = this->dataStructs[i]->last_feedback;
@@ -295,35 +311,35 @@ void CDPR::update() {
                 this->robotData.tensions(i) = this->torque2Tension(torque.Torque_Estimate);
             }
         }
+
+        // Update end-effector position and velocity
         this->eePos = this->solveFK(this->prevPos);
         Eigen::Vector2f eeVelRaw = (this->eePos - this->prevPos) / dt;
         float alpha = dt / (this->tau + dt);
         this->eeVel = alpha * eeVelRaw + (1.0f - alpha) * this->eeVel;
         this->prevPos = this->eePos;
     }
+
     if (this->robotState == CDPRState::Active || this->robotState == CDPRState::Waypoint || this->robotState == CDPRState::GridTest) {
-        if (!this->hold) {
-            // Serial.println("Updating Traj");
+        
+        // Update traj variables if moving
+        if (this->trajActive) {
             this->updateTraj(dt);
         }
-        
-        if (this->useFF) {
-            this->applyFFController(dt);
-        } else {
-            this->applyController(dt);
-        }
 
+        // Apply controller
+        this->applyFFController(dt);
+
+        // Updates for certain scenarios
         if (this->robotState == CDPRState::Waypoint) {
-            Serial.printf("%.5f,%.5f\n", this->eePos(0), this->eePos(1));
             this->manageWaypoints();
         } else if (this->robotState == CDPRState::GridTest) {
             this->updateGridTest();
         }
     }
 
-
+    // Check for ODrive errors
     if (now - lastErrorCheck > 1000) {
-        // --- Check ODrive errors for each motor ---
         for (int i = 0; i < NUM_ODRIVES; i++) {
             Get_Error_msg_t errMsg;
             bool success = this->odrives[i]->getError(errMsg, 1);
@@ -422,78 +438,28 @@ void CDPR::changeTensionSetpoint(float tensionSetpoint) {
 }
 
 void CDPR::setDesiredPos(Eigen::Vector2f pos) {
-    if (this->hold && (pos - this->eePos).norm() > 0.1) {
-        this->intError = Eigen::Vector2f::Zero();
-    }
+    // if (this->hold && (pos - this->eePos).norm() > 0.1) {
+    //     this->intError = Eigen::Vector2f::Zero();
+    // }
     this->desiredPos = pos;
 }
 
 void CDPR::applyController(float dt) {
     // Serial.println("=== Controller Active ===");
 
-    // Compute error
-    Eigen::Vector2f error = this->desiredPos - this->eePos;
-    // Serial.printf("EE Pos:       x = %.5f, y = %.5f\n", this->eePos(0), this->eePos(1));
-    // Serial.printf("Desired Pos:  x = %.5f, y = %.5f\n", this->desiredPos(0), this->desiredPos(1));
-    // Serial.printf("Error:        x = %.5f, y = %.5f\n", error(0), error(1));
+    // // Compute error
+    // Eigen::Vector2f error = this->desiredPos - this->eePos;
+    // // Serial.printf("EE Pos:       x = %.5f, y = %.5f\n", this->eePos(0), this->eePos(1));
+    // // Serial.printf("Desired Pos:  x = %.5f, y = %.5f\n", this->desiredPos(0), this->desiredPos(1));
+    // // Serial.printf("Error:        x = %.5f, y = %.5f\n", error(0), error(1));
 
-    // Compute derivative
-    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
-    // Serial.printf("EE Vel:    x = %.5f, y = %.5f\n", this->eeVel(0), this->eeVel(1));
-    // Serial.printf("Desired Vel:  x = %.5f, y = %.5f\n", this->desiredVel(0), this->desiredVel(1));
-    // Serial.printf("Vel Error:        x = %.5f, y = %.5f\n", velError(0), velError(1));
+    // // Compute derivative
+    // Eigen::Vector2f velError = this->desiredVel - this->eeVel;
+    // // Serial.printf("EE Vel:    x = %.5f, y = %.5f\n", this->eeVel(0), this->eeVel(1));
+    // // Serial.printf("Desired Vel:  x = %.5f, y = %.5f\n", this->desiredVel(0), this->desiredVel(1));
+    // // Serial.printf("Vel Error:        x = %.5f, y = %.5f\n", velError(0), velError(1));
 
-    // Compute integral
-    this->intError += error * dt;
-
-    // --- Scale integral error if it would violate tension limits ---
-    Eigen::Vector2f intForce = this->Ki * this->intError;
-    Eigen::Vector4f intTensions = this->computeTensionsFromForce(intForce);
-    float scale = 1.0f;
-
-    for (int i = 0; i < NUM_ODRIVES; i++) {
-        if (fabs(intTensions(i) > 1.0e-6f)) {
-            if (intTensions(i) > this->maxTension) {
-                scale = fmin(scale, this->maxTension / intTensions(i));
-            } else if (intTensions(i) < this->minTension) {
-                scale = fmin(scale, this->minTension / intTensions(i));
-            }
-        }
-    }
-
-    // Apply scaling if needed
-    this->intError *= scale;
-    // Serial.printf("Int Error:    x = %.5f, y = %.5f\n", this->intError(0), this->intError(1));
-
-    // Compute net force
-    Eigen::Vector2f netForce;
-    if (this->hold) {
-        netForce = this->Kp * error + this->Kd * velError + this->Ki * this->intError;
-    } else {
-        netForce = this->Kp * error + this->Kd * velError;
-    }
-    // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
-
-    // Compute cable tensions
-    Eigen::Vector4f tensions = this->computeTensionsFromForce(netForce);
-    for (int i = 0; i < NUM_ODRIVES; i++) {
-        tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
-        float torque = this->tension2Torque(tensions(i));
-        this->odrives[i]->setTorque(torque);
-        // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
-    }
-}
-
-void CDPR::applyFFController(float dt) {
-    // Serial.println("=== Controller Active ===");
-
-    // Compute error
-    Eigen::Vector2f error = this->desiredPos - this->eePos;
-
-    // Compute derivative
-    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
-
-    // Compute integral
+    // // Compute integral
     // this->intError += error * dt;
 
     // // --- Scale integral error if it would violate tension limits ---
@@ -515,15 +481,55 @@ void CDPR::applyFFController(float dt) {
     // this->intError *= scale;
     // // Serial.printf("Int Error:    x = %.5f, y = %.5f\n", this->intError(0), this->intError(1));
 
-    // Compute net force
-    Eigen::Vector2f netForce;
-    // if (this->hold) {
+    // // Compute net force
+    // Eigen::Vector2f netForce;
+    // if (this->trajActive {
     //     netForce = this->Kp * error + this->Kd * velError + this->Ki * this->intError;
     // } else {
     //     netForce = this->Kp * error + this->Kd * velError;
     // }
+    // // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
+
+    // // Compute cable tensions
+    // Eigen::Vector4f tensions = this->computeTensionsFromForce(netForce);
+    // for (int i = 0; i < NUM_ODRIVES; i++) {
+    //     tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
+    //     float torque = this->tension2Torque(tensions(i));
+    //     this->odrives[i]->setTorque(torque);
+    //     // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
+    // }
+}
+
+void CDPR::applyFFController(float dt) {
+
+    // Compute position and velocity errors
+    Eigen::Vector2f error = this->desiredPos - this->eePos;
+    Eigen::Vector2f velError = this->desiredVel - this->eeVel;
+
+    // // Compute integral
+    // this->intError += error * dt;
+
+    // // --- Scale integral error if it would violate tension limits ---
+    // Eigen::Vector2f intForce = this->Ki * this->intError;
+    // Eigen::Vector4f intTensions = this->computeTensionsFromForce(intForce);
+    // float scale = 1.0f;
+
+    // for (int i = 0; i < NUM_ODRIVES; i++) {
+    //     if (fabs(intTensions(i) > 1.0e-6f)) {
+    //         if (intTensions(i) > this->maxTension) {
+    //             scale = fmin(scale, this->maxTension / intTensions(i));
+    //         } else if (intTensions(i) < this->minTension) {
+    //             scale = fmin(scale, this->minTension / intTensions(i));
+    //         }
+    //     }
+    // }
+
+    // // Apply scaling if needed
+    // this->intError *= scale;
+
+    // Compute net force
+    Eigen::Vector2f netForce;
     netForce = this->Kp * error + this->Kd * velError;
-    // Serial.printf("Net Force:    Fx = %.5f, Fy = %.5f\n", netForce(0), netForce(1));
 
     // Compute cable tensions
     Eigen::Vector4f tensions = this->computeTensionsFF(netForce);
@@ -531,7 +537,6 @@ void CDPR::applyFFController(float dt) {
         tensions(i) = fmin(fmax(tensions(i), this->minTension), this->maxTension);
         float torque = this->tension2Torque(tensions(i));
         this->odrives[i]->setTorque(torque);
-        // Serial.printf("Cable %d: Tension = %.5f N, Torque = %.5f Nm\n", i, tensions(i), torque);
     }
 }
 
@@ -594,7 +599,6 @@ void CDPR::activateWaypoints() {
     this->currentWaypointInd = 0;
     this->completedWaypoints = false;
     this->useWaypointsTraj = false;
-    this->hold = true;
     this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
     for (int i = 0; i < NUM_ODRIVES; i++) {
         Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
@@ -606,10 +610,10 @@ void CDPR::activateWaypointsTraj(float speed) {
     this->robotState = CDPRState::Waypoint;
     this->currentWaypointInd = 0;
     this->completedWaypoints = false;
+    this->trajActive = true;
     this->useWaypointsTraj = true;
     this->waypointSpeed = speed;
     this->generateTrajVars(this->waypoints[this->currentWaypointInd], this->waypointSpeed);
-    this->setDesiredPos(this->waypoints[this->currentWaypointInd]);
     for (int i = 0; i < NUM_ODRIVES; i++) {
         Serial.printf("%0.4f,%0.4f\n", this->waypoints[i](0), this->waypoints[i](1));
     }
@@ -622,7 +626,7 @@ void CDPR::generateTrajVars(Eigen::Vector2f goalPos, float speed) {
     this->segmentLen = (goalPos - this->startPos).norm();
     this->trajSpeed = speed;
     this->s = 0.0;
-    this->hold = false;
+    this->trajActive = true;
 }
 
 void CDPR::manageWaypoints() {
@@ -673,8 +677,7 @@ void CDPR::updateTraj(float dt) {
     if (this->s >= this->segmentLen) {
         this->desiredPos = this->startPos + this->segmentDir * this->segmentLen;
         this->desiredVel.setZero();
-        this->hold = true; // Switch to hold mode
-        this->intError = this->desiredPos - this->eePos;
+        this->trajActive = false;
     }
 }
 
