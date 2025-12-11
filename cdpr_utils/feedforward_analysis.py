@@ -14,7 +14,7 @@ def design_matrix(xy, degree=3):
             x**3, x**2*y, x*y**2, y**3
         ])
 
-with open('ffmap.csv', 'r') as file:
+with open('ff_model_data/ffmap.csv', 'r') as file:
     csv_reader = csv.reader(file)
     data_list = list(csv_reader)
 
