@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include "cdpr.hpp"
 
+// CDPR object is defined in cdpr_main.ino
 extern CDPR cdpr;
 
 /**

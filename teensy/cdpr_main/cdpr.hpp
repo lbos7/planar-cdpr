@@ -64,9 +64,17 @@ class CDPR {
          */
         void checkGains();
 
+        /**
+         * @brief Prints the current end-effector position and cable tensions over Serial.
+         */
         void checkTensionsAtPos();
 
-
+        /**
+         * @brief Logs the current end-effector position and a reference position over Serial.
+         * 
+         * @param x Reference X position to log.
+         * @param y Reference Y position to log.
+         */
         void logPos(float x, float y);
 
         /**
@@ -175,32 +183,11 @@ class CDPR {
         float tension2Torque(float tension);
 
         /**
-         * @brief Changes the tension setpoint used to offset the tensions generated from the PID controller.
-         * 
-         * @param tensionSetpoint The tension force to use for offsetting.
-         */
-        void changeTensionSetpoint(float tensionSetpoint);
-
-        /**
-         * @brief Changes the desired end-effector position.
-         * 
-         * @param pos The new desired end-effector positiion.
-         */
-        void setDesiredPos(Eigen::Vector2f pos);
-
-        /**
-         * @brief Applies a PID controller based on position and velocity error.
-         * 
-         * @param dt The difference in time since the last control loop execution.
-         */
-        void applyController(float dt);
-
-        /**
          * @brief Applies a PID + Feedforward controller based on position and velocity error.
          * 
          * @param dt The difference in time since the last control loop execution.
          */
-        void applyFFController(float dt);
+        void applyController(float dt);
 
         /**
          * @brief Computes 4 cable tensions from 2D force.
@@ -208,12 +195,7 @@ class CDPR {
          * @param force The force to decompose into tensions (N).
          * @return Eigen::Vector4f The 4 cable tensions corresponding to the input force (N).
          */
-        Eigen::Vector4f computeTensionsFromForce(Eigen::Vector2f &force);
-
-        Eigen::Vector4f computeTensionsFF(Eigen::Vector2f &force);
-
-
-        Eigen::Vector2f computeForceFromTensions(Eigen::Vector4f &tensions);
+        Eigen::Vector4f computeControllerTensions(Eigen::Vector2f &force);
 
         /**
          * @brief Computes unit vectors from end-effector to anchor points for each cable.
@@ -223,12 +205,17 @@ class CDPR {
         Eigen::Matrix<float, 4, 2> computeCableUnitVecs();
 
         /**
+         * @brief Computes a basis vector from the desired end-effector position for use in feedforward force estimation.
+         */
+        Eigen::Matrix<float, 10, 1> computeFFBasis();
+
+        /**
          * @brief Loads a waypoints arranged in a square for the end-effector to move between.
          * 
          * @param sideLen The spacing between waypoints (m).
          * @param center The x,y centerpoint between all of the waypoints (m).
          */
-        void loadSquareTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
+        void loadSquareWaypoints(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
 
         /**
          * @brief Loads a waypoints arranged in a diamond for the end-effector to move between.
@@ -236,19 +223,14 @@ class CDPR {
          * @param sideLen The spacing between waypoints (m).
          * @param center The x,y centerpoint between all of the waypoints (m).
          */
-        void loadDiamondTraj(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
-
-        /**
-         * @brief Activates waypoint-following mode using the setpoint controller.
-         */
-        void activateWaypoints();
+        void loadDiamondWaypoints(float sideLen, Eigen::Vector2f center = Eigen::Vector2f::Zero());
 
         /**
          * @brief Activates waypoint-following mode using the trajectory-following controller.
          * 
          * @param speed The desired end-effector speed (m/s).
          */
-        void activateWaypointsTraj(float speed);
+        void activateWaypointsTraj(float speed = 1.0);
 
         /**
          * @brief Generates variables necessary for the end-effector to follow a trajectory.
@@ -256,7 +238,7 @@ class CDPR {
          * @param goalPos The goal x,y position for the end-effector (m).
          * @param speed The desired speed for the end-effector (m/s).
          */
-        void generateTrajVars(Eigen::Vector2f goalPos, float speed);
+        void generateTrajVars(Eigen::Vector2f goalPos, float speed = 1.0);
 
         /**
          * @brief Handles waypoint-following mode operation and adjusts the current waypoint.
@@ -270,17 +252,23 @@ class CDPR {
          */
         void updateTraj(float dt);
 
+        // ==========================================
+        // ===== FEEDFORWARD MODEL GRID TESTING =====
+        // ==========================================
+        // NOTE:
+        // These methods are only used for collecting new data to
+        // retrain or refine the feedforward model. They should not
+        // be modified or called during normal operation.
 
+        /**
+         * @brief Initializes the grid-testing routine by resetting indices, flags, and transitioning the robot into GridTest mode.
+         */
         void startGridTest();
 
-
+        /**
+         * @brief Executes one step of the grid test, advancing through grid checkpoints, triggering tension logging, and generating trajectories to each point.
+         */
         void updateGridTest();
-
-
-        Eigen::Matrix<float, 10, 1> computeFFBasis();
-
-
-        void toggleFF();
 
     private:
 
@@ -323,7 +311,7 @@ class CDPR {
         bool trajActive = false;           ///< True if trajectory is active
         float trajSpeed = 0.0;             ///< Speed of current trajectory
 
-        // Trajectory / waypoint variables
+        // Trajectory variables
         float s = 0.0;                     ///< Progress along current trajectory segment
         float segmentLen = 0.0;            ///< Length of current segment
         Eigen::Vector2f segmentDir = Eigen::Vector2f::Zero(); ///< Unit vector along segment
@@ -341,13 +329,12 @@ class CDPR {
         Eigen::Vector2f prevError = Eigen::Vector2f::Zero();  ///< Error from previous timestep
         float prevUpdateTime = 0.0;                           ///< Timestamp of previous update
 
-        // Waypoints and trajectory handling
+        // Waypoints handling
         std::vector<Eigen::Vector2f> waypoints; ///< List of waypoints for path following
         float waypointDistThresh = 0.015;       ///< Distance threshold to consider waypoint reached
         uint8_t currentWaypointInd = 0;         ///< Index of the current target waypoint
         float waypointSpeed = 0.0;              ///< Speed to move along waypoints
         bool completedWaypoints = false;        ///< True if all waypoints are completed
-        bool useWaypointsTraj = false;          ///< Flag to use waypoint-based trajectory
 
         // Grid test parameters
         float gridTestSpeed = 0.25;             ///< Speed for grid test motion
@@ -364,10 +351,7 @@ class CDPR {
             0.237981,  0.316913,  0.395845
         };
         bool firstGridPoint = true;             ///< True if first grid point has not been reached
-
-        // Logging / feedforward usage
         Eigen::Vector2f lastLoggedPos = Eigen::Vector2f::Zero(); ///< Last position logged
-        bool useFF = true;                      ///< Flag to enable feedforward controller
 
 
         /**

@@ -1,5 +1,6 @@
 #include "cdprConfig.h"
 
+// FF model coefficients - each row corresponds to a cable
 Eigen::Matrix<float, 4, 10> FF_COEFFS = 
     (Eigen::Matrix<float, 4, 10>() << 
         28.79650335, 32.81664622, 33.14320639, -24.94530493, 41.34633495, -23.94558286, 172.46662522, -261.3942155, -254.84808309, 183.12926456,
