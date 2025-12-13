@@ -95,7 +95,7 @@ After installation, you should see the libraries in the `Arduino/libraries/` dir
 - `loads <sideLen> <x> <y>` — Load square waypoints with given side length and center position
 - `loadd <sideLen> <x> <y>` — Load diamond waypoints with given side length and center position
 - `waypoints [speed]` — Activate waypoints trajectory with optional speed (uses default speed of 1 m/s if not provided)
-- `move <x> <y> [speed]` — Move to position (x, y) with optional speed (default of 1 m/s); workspace is about .8m x .8m, so the posiiton
+- `move <x> <y> [speed]` — Move to position (x, y) with optional speed (default of 1 m/s); workspace is about 0.8 m x 0.8 m centered at (0, 0), so the commanded position should be between -0.4 m and 0.4 m for both x and y coordinates
 - `log <x> <y>` — Log the current position at (x, y), where (x, y) is the estimated end-effector position from and apriltag
 
 ## Notes
